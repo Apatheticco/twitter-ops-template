@@ -246,7 +246,6 @@
 |------------|------|---------------|
 | Followin MCP | 热门话题、热门快讯、频道内容 | trend-scout |
 | Premium MCP | Twitter 数据、加密价格、美股、宏观、新闻 | trend-scout, performance-review |
-| TradingView MCP | 技术分析、市场快照 | trend-scout |
 
 ### 文件结构
 
