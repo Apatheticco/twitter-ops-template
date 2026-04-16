@@ -9,6 +9,13 @@ description: "Crypto & macro market trend scanner — orchestrates MCP tools and
 
 ---
 
+## 价格数据铁律
+
+1. **单一信源**：简报中所有当前价格/涨跌幅，只能引用 `crypto_realtime_price_batch` 返回的数字。新闻标题、热门话题里的价格描述一律视为"历史叙述"，标注为叙事来源，不作为当前数据使用。
+2. **简报强制分区**：输出简报必须分为「📊 实时数据区」（只放 API 返回的硬数据）和「📰 叙事摘要区」（新闻/KOL/事件，标注来源）。两个区的数字不混用。下游 topic-engine / tweet-composer 引用价格时，只能取实时数据区的数字。
+
+---
+
 ## 数据采集层：工具 → Skill 双层架构
 
 trend-scout 有两层数据来源：
@@ -117,7 +124,7 @@ trend-scout 有两层数据来源：
    拿到：项目升级、合作、事故等
 ```
 
-### 第三步：交易信号 & 大户动向（建议跑）
+### 第三步：交易信号 & 大户动向 & TG 情报（建议跑）
 
 **并行调用 Premium MCP：**
 
@@ -138,7 +145,23 @@ trend-scout 有两层数据来源：
    拿到：鲸鱼钱包大额操作
    ⚠️ 格式：返回纯文本拼接（非结构化JSON），每条含时间戳/交易员名/Token/方向/仓位/PNL/清算价
 
-→ 交叉比对：KOL 喊单 vs 大户实盘，找多空分歧
+4. TG 频道情报（多维度并行）
+   工具：tg_kol_feeds
+   并行调用多个 category：
+   - tg_kol_feeds(category="macro", hours=24, limit=30)         → 宏观讨论
+   - tg_kol_feeds(category="trading_signal", hours=24, limit=30) → 交易信号
+   - tg_kol_feeds(category="narrative", hours=24, limit=30)      → 叙事/热点话题
+   - tg_kol_feeds(category="onchain_data", hours=24, limit=30)   → 链上数据分析
+   拿到：TG 社区各维度实时讨论，覆盖中英文 KOL 频道
+   → 重点提取：TG 共识方向、与 Twitter CT 的情绪差异、独家信号（TG先于Twitter传播的消息）
+
+5. TG 精选日报
+   工具：open_feed_list_tg_daily
+   参数：count=10, lang="zh-cn"
+   拿到：TG 频道精选日报摘要
+
+→ 交叉比对：KOL 喊单 vs 大户实盘 vs TG 社区共识，找多空分歧
+→ TG-Twitter 情绪差异 = 信息差 = 高价值推文素材
 → 分歧越大 = 推文价值越高
 ```
 
@@ -194,21 +217,10 @@ trend-scout 有两层数据来源：
 拿到：黄金、标普500、美元指数、日元汇率
 ```
 
-### 第六步：社区舆论（按需）
+### 第六步：社区舆论深挖（按需）
 
 ```
-1. TG 频道聚合
-   工具：tg_kol_feeds
-   参数：category="macro", hours=24, limit=30
-   补充：category="trading_signal" / "narrative" / "onchain_data" 按需切换
-   拿到：TG 社区各维度讨论
-
-2. TG Daily 日报
-   工具：open_feed_list_tg_daily
-   参数：count=10, lang="zh-cn"
-   拿到：TG 精选日报
-
-3. 特定 Token 深挖（当某 Token 频繁出现在热点中）
+1. 特定 Token 深挖（当某 Token 频繁出现在热点中）
    工具：open_feed_list_tag
    参数：symbol="[TOKEN]", type="key_events"
    +
@@ -255,6 +267,8 @@ trend-scout 有两层数据来源：
 | **多源共振** | 同一事件在 ≥2 个数据源出现 | ★★★★★ |
 | **数据-叙事背离** | 链上数据和市场情绪方向相反 | ★★★★★ |
 | **KOL-大户分歧** | KOL 喊多但大户在减仓（或反之） | ★★★★★ |
+| **TG-Twitter情绪差异** | TG 社区共识与 Twitter CT 情绪方向不同 | ★★★★★ |
+| **TG抢先信号** | 消息在 TG 传播但 Twitter 尚未讨论 | ★★★★★ |
 | **抢先窗口** | 事件 <6h 且 Twitter 讨论量低 | ★★★★ |
 | **资金异动+价格联动** | 大额转账后价格开始异动 | ★★★★ |
 | **宏观-加密联动** | 宏观数据影响加密市场情绪 | ★★★ |
@@ -279,41 +293,52 @@ trend-scout 有两层数据来源：
 ```
 # 📋 每日热点简报 — [日期]
 
-## ⚡ 数据采集概览
+## 📊 实时数据区（仅限 API 返回的硬数据）
+
+### ⚡ 数据采集概览
 - 采集时间：[时间戳]
 - 已调用工具：[列出本次实际调用了哪些 MCP 工具和 Skill]
+
+### 价格快照（来源：crypto_realtime_price_batch）
 - BTC：$XX,XXX (24h ±X.X%)
 - ETH：$X,XXX (24h ±X.X%)
-- BTC 宏观评分：[X/100]（如已查询）
+- [其他代币...]
 
-## 🔥 必关注（Top 3-5）
+### 大户持仓快照（来源：top_traders_live_24h / whale_trader_feeds）
+[交易员实盘持仓变化，含具体仓位/PnL数字]
+
+### 数据信号（来源：open_channel_feeds）
+[链上异常、资金费率异动、量价异常]
+
+---
+
+## 📰 叙事摘要区（新闻/KOL/事件，标注来源）
+⚠️ 此区域价格数字为新闻发布时的历史数据，非实时。下游引用价格只取实时数据区。
+
+### 🔥 必关注（Top 3-5）
 [最重要的事件，按 重要性×时效性 排序]
 [每条包含完整的结构化分析]
 
-## 📊 数据信号
-[链上异常、资金异动、大户持仓变化]
-- 来源：open_channel_feeds(fund_movement/quant_signal) + whale_trader_feeds
-
-## 🐋 资金流向 & 交易信号
+### 🐋 资金流向 & 交易信号
 [KOL 喊单 vs 大户实盘对比]
 [多空分歧分析]
 - 来源：kol_call_orders_24h + top_traders_live_24h + whale_trader_feeds
 
-## 🏛️ 宏观动态
+### 🏛️ 宏观动态
 [央行、政策、经济数据]
 - 来源：finance_tool_economic_calendar + treasury_rates + search_finance_news
 
-## 💬 社区风向
+### 💬 社区风向
 [Twitter 热议 + TG 共识/分歧]
 - 来源：twitter_advanced_search + tg_kol_feeds + open_feed_list_tg_daily
 
-## 📝 选题建议
+### 📝 选题建议
 基于以上热点，推荐今日发推方向：
 1. [热点A] — 角度建议 — 理由 — 时效窗口 — 数据支撑度
 2. [热点B] — 角度建议 — 理由 — 时效窗口 — 数据支撑度
 3. [热点C] — 角度建议 — 理由 — 时效窗口 — 数据支撑度
 
-## ⚠️ 未验证信息
+### ⚠️ 未验证信息
 [单源信息、传闻、需进一步确认的消息]
 ```
 
@@ -332,16 +357,17 @@ trend-scout 有两层数据来源：
   - open_channel_feeds × 5
   - crypto_realtime_price_batch
 
-并行 Wave 2（交易信号 + 宏观）：
+并行 Wave 2（交易信号 + TG情报 + 宏观）：
   - kol_call_orders_24h
   - top_traders_live_24h
   - whale_trader_feeds
+  - tg_kol_feeds × 4（macro/trading_signal/narrative/onchain_data）
+  - open_feed_list_tg_daily
   - finance_tool_economic_calendar
   - finance_tool_treasury_rates
 
 按需 Wave 3（深挖）：
   - twitter_advanced_search / open_search_feed
-  - tg_kol_feeds
   - /08_btc-macro-dashboard
 ```
 

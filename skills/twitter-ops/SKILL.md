@@ -25,11 +25,20 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ---
 
+## 价格数据铁律（贯穿全流程）
+
+1. **单一信源**：所有推文中出现的价格/涨跌幅，只能引用 `crypto_realtime_price_batch` 返回的数字。新闻标题、热门话题里的价格描述一律视为"历史叙述"，不作为当前数据使用。
+2. **简报强制分区**：热点简报必须分为「📊 实时数据区」（只放API返回的硬数据）和「📰 叙事摘要区」（新闻/KOL观点/事件描述，标注来源）。两个区的数字不混用。
+3. **写推文前价格二次确认**：Stage 3 撰写推文前，如果推文涉及具体价格，必须重新调一次 `crypto_realtime_price_batch` 获取最新数据，不引用 Stage 1 简报里的数字（采集到写稿可能已过几分钟，价格会变）。
+4. **质检价格核验**：检查点③ 的质检清单新增硬性检查项：`[ ] 推文中所有价格/数据与最近一次API返回值一致`。
+
+---
+
 ## 主流水线：内容生产
 
 ```
-[热点采集] → 检查点① → [选题排序] → 检查点② → [内容撰写] → 检查点③ → [终稿输出]
- trend-scout              topic-engine              composer/deep-write
+[热点采集] → 检查点① → [选题排序] → 检查点② → [价格二次确认] → [内容撰写] → 检查点③(含价格核验) → [终稿输出]
+ trend-scout              topic-engine              crypto_realtime_price_batch    composer/deep-write
 ```
 
 ### Stage 1：热点采集
