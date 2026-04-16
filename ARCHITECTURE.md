@@ -111,7 +111,7 @@ Output is a structured briefing with **mandatory two-zone separation**:
 - 📰 **Narrative Zone** — news, KOL opinions, event descriptions (marked as historical)
 
 **Supplementary scan** (triggered when topics are scarce):
-When the pre-filter leaves fewer than 2 usable topics, trend-scout auto-triggers a broader scan using `search_finance_news`, `finance_tool_news_crypto_latest`, and `finance_tool_economic_calendar` to find additional angles from mainstream financial media and macro events.
+When the pre-filter leaves fewer than 2 usable topics, trend-scout auto-triggers a broader scan using `twitter_advanced_search` and `search_finance_news` to find additional angles from mainstream financial media and macro events.
 
 **Checkpoint ①** — topic filtering (auto: top 3 by signal strength / manual: user selects)
 
