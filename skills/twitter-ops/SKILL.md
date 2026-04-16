@@ -194,6 +194,32 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ---
 
+## 热点采集执行模式
+
+trend-scout 有 6 种执行模式，主调度器根据指令自动匹配：
+
+| 模式 | 触发 | 范围 | 耗时 |
+|------|------|------|------|
+| 🟢 首扫/完整 | "跑一轮" / 当日首次 | Wave 1+2 全量 | ~3-5分钟 |
+| 🔵 刷新 | "刷新一下" / "有什么新的" / "更新" | 高时效源增量（8工具并行） | ~1-2分钟 |
+| 🟡 快速 | "快速扫一下" | Wave 1 | ~1分钟 |
+| 🔴 突发 | "突发：[事件]" | 定向搜索+价格 | ~1分钟 |
+| 🟠 补充 | "热点不够" / 自动回调 | 扩源找话题 | ~1分钟 |
+| 🟣 深度 | "深挖[Token/话题]" | 全部+单点深挖 | ~5-8分钟 |
+
+### 🔵 刷新模式
+
+首扫建立全景后，日内后续扫描只跑高时效源追增量：
+→ 调用 `trend-scout`（Refresh 模式）
+
+并行 8 路：twitter_advanced_search × 2 + search_finance_news + open_feed_news + open_feed_articles + crypto_realtime_price_batch + whale_trader_feeds + top_traders_live_24h + kol_call_orders_24h
+
+**不跑**：Followin热榜排序/频道、TG feeds、经济日历、国债利率
+
+**输出**：增量补丁（🆕新增 / 📈升温 / 🔄仓位变化 / 💰价格delta）→ 进入 Stage 2 选题排序
+
+---
+
 ## 辅助流水线
 
 以下流程独立于主流水线，按需或定期运行：
@@ -239,9 +265,12 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 | 指令 | 调用 Skill | 说明 |
 |------|-----------|------|
-| "扫一下热点" | trend-scout | 只跑热点采集 |
+| "跑一轮" / "跑一遍热点" | trend-scout → topic-engine → tweet-composer | 完整首扫 + 选题 + 撰写 |
+| "刷新一下" / "有什么新的" | trend-scout（Refresh模式） | 高时效源增量扫描 |
+| "扫一下热点" | trend-scout（Quick模式） | 只跑 Wave 1 |
 | "深度扫描" | trend-scout（Full模式） | 完整三轮数据采集 |
 | "突发：[事件]" | trend-scout → topic-engine → tweet-composer | 突发快速通道 |
+| "热点不够" | trend-scout（补充模式） | 扩源找话题 |
 | "今天发什么" | trend-scout → topic-engine | 热点 + 选题 |
 | "帮我写推文：[内容/角度]" | tweet-composer | 直接写推文 |
 | "写篇深度文章：[主题]" | deep-write | 长文写作 |
