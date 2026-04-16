@@ -110,6 +110,9 @@ Output is a structured briefing with **mandatory two-zone separation**:
 - 📊 **Realtime Data Zone** — only hard API numbers (prices, rates, volumes)
 - 📰 **Narrative Zone** — news, KOL opinions, event descriptions (marked as historical)
 
+**Supplementary scan** (triggered when topics are scarce):
+When the pre-filter leaves fewer than 2 usable topics, trend-scout auto-triggers a broader scan using `search_finance_news`, `finance_tool_news_crypto_latest`, and `finance_tool_economic_calendar` to find additional angles from mainstream financial media and macro events.
+
 **Checkpoint ①** — topic filtering (auto: top 3 by signal strength / manual: user selects)
 
 ### Stage 2 — Topic Selection (topic-engine)
@@ -185,7 +188,7 @@ The system identifies high-value content angles by cross-referencing multiple da
 | Early window | Event <6h old with low Twitter discussion volume | ★★★★ |
 
 ### 3. Time-Based Hard Filter
-Stale content is excluded before any processing begins — not just deprioritized. The 48-hour cutoff prevents the system from generating angles around outdated events. If fewer than 2 topics survive the filter, the system prompts a fresh trend-scout run instead of falling back to old content.
+Stale content is excluded before any processing begins — not just deprioritized. The 48-hour cutoff prevents the system from generating angles around outdated events. If fewer than 2 topics survive the filter, the system auto-triggers trend-scout's supplementary scan rather than falling back to stale content.
 
 ### 4. Persona Consistency
 Every piece of content is checked against a data-calibrated voice guide (derived from analysis of 647 published tweets):

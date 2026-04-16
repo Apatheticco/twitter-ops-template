@@ -344,6 +344,44 @@ trend-scout 有两层数据来源：
 
 ---
 
+## 补充扫描（热点匮乏时触发）
+
+当常规采集（Step 1-5）结果不理想时，启动补充扫描拉取更广泛的新闻资讯。
+
+**触发条件：**
+- **自动触发**：下游 topic-engine 时效过滤后可用话题 < 2 个，自动回调补充扫描
+- **手动触发**：用户指令 "热点不够" / "再扫一轮" / "补充扫描"
+
+**补充扫描工具（并行调用）：**
+
+```
+1. 跨媒体财经新闻搜索
+   工具：search_finance_news
+   参数：keyword="crypto OR bitcoin OR ethereum", users=[全部媒体]
+   拿到：Bloomberg/Reuters/CNBC/WSJ 等 30+ 主流财经媒体最新报道
+   ⚠️ 数据处理：只提取 title + content（摘要），忽略 full_content 字段
+   → 重点寻找：主流媒体关注但 CT 尚未热议的话题（信息差 = 抢先窗口）
+
+2. 最新加密新闻聚合
+   工具：finance_tool_news_crypto_latest
+   拿到：最新加密货币新闻聚合
+   → 重点寻找：刚发生的事件、未被 Followin 热榜收录的新消息
+
+3. 今日宏观经济日历
+   工具：finance_tool_economic_calendar
+   拿到：今日/本周经济数据发布时间表
+   ⚠️ 注意：返回数据极大（7000+条），必须用 Agent 子进程调用
+   → 只提取 impact="High" 且 country="US"/"CN"/"EU" 的事件
+   → 重点寻找：即将发布的重磅数据（CPI/非农/FOMC/PMI）作为预热选题
+```
+
+**补充扫描输出规则：**
+- 补充结果追加到原简报的「📰 叙事摘要区」，标注 `[补充扫描]` 来源
+- 如发现新的价格相关事件，同步刷新「📊 实时数据区」的价格快照
+- 补充扫描后仍无可用话题 → 输出警告，建议用户手动补充关注话题
+
+---
+
 ## 执行模式
 
 ### 🟢 完整模式（"跑一遍热点" / "开始今日运营"）
@@ -396,6 +434,18 @@ trend-scout 有两层数据来源：
     → 零结果时本身是有价值信号：主流媒体未报道 = 抢先窗口仍在
 → 输出：事件速报 + 多源验证 + 初步角度建议
 → 目标：5 分钟内从发现到给出可发推的内容方向
+```
+
+### 🟠 补充模式（"热点不够" / topic-engine 自动回调）
+
+补充扫描单独跑（~1 分钟）：
+```
+并行：
+  - search_finance_news(keyword="crypto OR bitcoin OR ethereum")
+  - finance_tool_news_crypto_latest
+  - finance_tool_economic_calendar（Agent 子进程，只取 High impact）
+→ 输出：追加到现有简报，标注 [补充扫描] 来源
+→ 回传给 topic-engine 重新进入时效过滤和选题流程
 ```
 
 ### 🔵 深度模式（"深挖 [Token/话题]"）
