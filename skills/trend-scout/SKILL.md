@@ -370,24 +370,19 @@ trend-scout 有两层数据来源：
    ⚠️ 数据处理：只提取 title + content（摘要），忽略 full_content 字段
    → 重点寻找：主流媒体关注但 CT 尚未热议的话题（信息差 = 抢先窗口）
 
-3. 最新加密新闻聚合
-   工具：finance_tool_news_crypto_latest
-   拿到：最新加密货币新闻聚合
-   → 重点寻找：刚发生的事件、未被 Followin 热榜收录的新消息
-
-4. Followin 实时快讯 + 文章
+3. Followin 实时快讯 + 文章
    工具：open_feed_news(only_important=true, count=20, lang="zh-cn")
         + open_feed_articles(only_important=true, count=15, lang="zh-cn")
    拿到：Followin 首页重要快讯流 + 重要文章流（实时更新）
    → 重点寻找：首扫后新发布的快讯和深度文章，与推特/新闻源交叉验证
    → 快讯侧重事件速报，文章侧重分析观点
 
-5. 加密实时价格（必刷）
+4. 加密实时价格（必刷）
    工具：crypto_realtime_price_batch
    参数：symbols="BTC,ETH,SOL,BNB,XRP,DOGE,ADA,LINK,AVAX,SUI"
    → 与首扫价格做 delta 对比
 
-6. 鲸鱼 & 大户最新动作
+5. 鲸鱼 & 大户最新动作
    工具：whale_trader_feeds + top_traders_live_24h + kol_call_orders_24h
    → 重点寻找：首扫后新增的仓位变化、新喊单
 ```
@@ -420,9 +415,6 @@ trend-scout 有两层数据来源：
 
 2. 跨媒体财经新闻搜索
    工具：search_finance_news（同刷新模式）
-
-3. 最新加密新闻聚合
-   工具：finance_tool_news_crypto_latest
 ```
 
 **补充扫描输出规则：**
@@ -466,7 +458,6 @@ trend-scout 有两层数据来源：
 并行：
   - twitter_advanced_search × 2（中文 Top + 英文 Top）
   - search_finance_news(keyword="crypto OR bitcoin OR ethereum")
-  - finance_tool_news_crypto_latest
   - open_feed_news(only_important=true)（Followin 实时快讯）
   - open_feed_articles(only_important=true)（Followin 重要文章）
   - crypto_realtime_price_batch（价格必刷）
@@ -511,7 +502,6 @@ trend-scout 有两层数据来源：
 并行：
   - twitter_advanced_search × 2（中文 Top + 英文 Top）
   - search_finance_news(keyword="crypto OR bitcoin OR ethereum")
-  - finance_tool_news_crypto_latest
 → 输出：追加到现有简报，标注 [补充扫描] 来源
 → 回传给 topic-engine 重新进入时效过滤和选题流程
 ```

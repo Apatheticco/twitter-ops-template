@@ -85,7 +85,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 → 调用 `topic-engine`（输入：筛选后的话题）
 
 **时效性硬过滤**（topic-engine 最先执行）：>48h 直接淘汰，24-48h 降级保留需≥2个数据点。
-**热点匮乏自动补充**：过滤后可用话题 < 2 个 → 自动回调 trend-scout 补充扫描（twitter_advanced_search × 2 + search_finance_news + news_crypto_latest），用补充结果重新选题。
+**热点匮乏自动补充**：过滤后可用话题 < 2 个 → 自动回调 trend-scout 补充扫描（twitter_advanced_search × 2 + search_finance_news），用补充结果重新选题。
 
 **输出**：每个话题的角度方案 + P0-P3优先级排序 + 推荐格式（单推/Thread/长文）
 
