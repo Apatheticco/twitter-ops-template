@@ -344,35 +344,85 @@ trend-scout 有两层数据来源：
 
 ---
 
-## 补充扫描（热点匮乏时触发）
+## 刷新扫描（日内增量更新）
 
-当常规采集（Step 1-5）结果不理想时，启动补充扫描拉取更广泛的新闻资讯。
+首扫（完整模式）建立当日全景后，日内后续扫描只跑高时效数据源，追踪增量变化。
 
 **触发条件：**
-- **自动触发**：下游 topic-engine 时效过滤后可用话题 < 2 个，自动回调补充扫描
-- **手动触发**：用户指令 "热点不够" / "再扫一轮" / "补充扫描"
+- **手动触发**：用户指令 "刷新一下" / "有什么新的" / "更新" / "再扫一下"
+- **定时触发**：可配合定时任务，每 2-4 小时自动刷新
 
-**补充扫描工具（并行调用）：**
+**刷新扫描工具（全部并行调用）：**
 
 ```
-1. 跨媒体财经新闻搜索
+1. 推特热点检索（中文+英文各一条，并行）
+   工具：twitter_advanced_search × 2
+   参数①：query="crypto OR bitcoin OR ethereum lang:zh since:今日日期", queryType="Top"
+   参数②：query="(crypto OR BTC) (dump OR pump OR breaking OR scam) lang:en since:今日日期", queryType="Top"
+   拿到：中英文 CT 高互动推文（按热度排序）
+   → 重点寻找：高互动推文中的锐评角度、争议观点、反差数据
+   → 结果量大时用 Agent 子进程提取 Top 10
+
+2. 跨媒体财经新闻搜索
    工具：search_finance_news
    参数：keyword="crypto OR bitcoin OR ethereum", users=[全部媒体]
    拿到：Bloomberg/Reuters/CNBC/WSJ 等 30+ 主流财经媒体最新报道
    ⚠️ 数据处理：只提取 title + content（摘要），忽略 full_content 字段
    → 重点寻找：主流媒体关注但 CT 尚未热议的话题（信息差 = 抢先窗口）
 
-2. 最新加密新闻聚合
+3. 最新加密新闻聚合
    工具：finance_tool_news_crypto_latest
    拿到：最新加密货币新闻聚合
    → 重点寻找：刚发生的事件、未被 Followin 热榜收录的新消息
 
-3. 今日宏观经济日历
-   工具：finance_tool_economic_calendar
-   拿到：今日/本周经济数据发布时间表
-   ⚠️ 注意：返回数据极大（7000+条），必须用 Agent 子进程调用
-   → 只提取 impact="High" 且 country="US"/"CN"/"EU" 的事件
-   → 重点寻找：即将发布的重磅数据（CPI/非农/FOMC/PMI）作为预热选题
+4. Followin 实时快讯 + 文章
+   工具：open_feed_news(only_important=true, count=20, lang="zh-cn")
+        + open_feed_articles(only_important=true, count=15, lang="zh-cn")
+   拿到：Followin 首页重要快讯流 + 重要文章流（实时更新）
+   → 重点寻找：首扫后新发布的快讯和深度文章，与推特/新闻源交叉验证
+   → 快讯侧重事件速报，文章侧重分析观点
+
+5. 加密实时价格（必刷）
+   工具：crypto_realtime_price_batch
+   参数：symbols="BTC,ETH,SOL,BNB,XRP,DOGE,ADA,LINK,AVAX,SUI"
+   → 与首扫价格做 delta 对比
+
+6. 鲸鱼 & 大户最新动作
+   工具：whale_trader_feeds + top_traders_live_24h + kol_call_orders_24h
+   → 重点寻找：首扫后新增的仓位变化、新喊单
+```
+
+**刷新扫描输出格式（增量补丁，非全量简报）：**
+```
+📡 刷新扫描（距首扫 Xh）
+- 🆕 新增话题：[首扫没出现的]
+- 📈 升温话题：[首扫有但现在热度/数据变了]
+- 🔄 仓位变化：[大户新操作]
+- 💰 价格变化：[vs 首扫快照的 delta]
+- ⚠️ 未验证信息：[单源新消息]
+```
+
+---
+
+## 补充扫描（热点匮乏时触发）
+
+当首扫结果经 topic-engine 时效过滤后可用话题不足时，紧急扩源找更多话题。
+
+**触发条件：**
+- **自动触发**：下游 topic-engine 时效过滤后可用话题 < 2 个，自动回调补充扫描
+- **手动触发**：用户指令 "热点不够" / "补充扫描"
+
+**补充扫描工具（并行调用）：**
+
+```
+1. 推特热点检索（同刷新模式）
+   工具：twitter_advanced_search × 2（中文 Top + 英文 Top）
+
+2. 跨媒体财经新闻搜索
+   工具：search_finance_news（同刷新模式）
+
+3. 最新加密新闻聚合
+   工具：finance_tool_news_crypto_latest
 ```
 
 **补充扫描输出规则：**
@@ -384,9 +434,9 @@ trend-scout 有两层数据来源：
 
 ## 执行模式
 
-### 🟢 完整模式（"跑一遍热点" / "开始今日运营"）
+### 🟢 首扫/完整模式（"跑一遍热点" / "开始今日运营" / 当日首次）
 
-调用步骤 1-6 全部，约 3-5 分钟：
+每日第一次扫描，铺面建立全景。调用步骤 1-6 全部，约 3-5 分钟：
 ```
 并行 Wave 1（CT 热点 + 链上异动 + 价格快照）：
   - open_trending_topic_ranks
@@ -401,12 +451,30 @@ trend-scout 有两层数据来源：
   - whale_trader_feeds
   - tg_kol_feeds × 4（macro/trading_signal/narrative/onchain_data）
   - open_feed_list_tg_daily
-  - finance_tool_economic_calendar
+  - finance_tool_economic_calendar（一天跑一次即可）
   - finance_tool_treasury_rates
 
 按需 Wave 3（深挖）：
   - twitter_advanced_search / open_search_feed
   - /08_btc-macro-dashboard
+```
+
+### 🔵 刷新模式（"刷新一下" / "有什么新的" / "更新" / 日内非首次扫描）
+
+日内后续扫描，只跑高时效源追增量（~1-2 分钟）：
+```
+并行：
+  - twitter_advanced_search × 2（中文 Top + 英文 Top）
+  - search_finance_news(keyword="crypto OR bitcoin OR ethereum")
+  - finance_tool_news_crypto_latest
+  - open_feed_news(only_important=true)（Followin 实时快讯）
+  - open_feed_articles(only_important=true)（Followin 重要文章）
+  - crypto_realtime_price_batch（价格必刷）
+  - whale_trader_feeds（链上动作实时）
+  - top_traders_live_24h（大户仓位变化）
+  - kol_call_orders_24h（新喊单）
+→ 输出：增量补丁（🆕新增 / 📈升温 / 🔄仓位变化 / 💰价格delta）
+→ 不跑：Followin热榜排序/频道、TG feeds、经济日历、国债利率（日内变化小）
 ```
 
 ### 🟡 快速模式（"快速扫一下"）
@@ -438,17 +506,17 @@ trend-scout 有两层数据来源：
 
 ### 🟠 补充模式（"热点不够" / topic-engine 自动回调）
 
-补充扫描单独跑（~1 分钟）：
+首扫结果不足时紧急扩源（~1 分钟）：
 ```
 并行：
+  - twitter_advanced_search × 2（中文 Top + 英文 Top）
   - search_finance_news(keyword="crypto OR bitcoin OR ethereum")
   - finance_tool_news_crypto_latest
-  - finance_tool_economic_calendar（Agent 子进程，只取 High impact）
 → 输出：追加到现有简报，标注 [补充扫描] 来源
 → 回传给 topic-engine 重新进入时效过滤和选题流程
 ```
 
-### 🔵 深度模式（"深挖 [Token/话题]"）
+### 🟣 深度模式（"深挖 [Token/话题]"）
 
 完整模式 + 单点深挖（~5-8 分钟）：
 ```
