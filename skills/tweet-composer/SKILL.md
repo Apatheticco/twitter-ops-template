@@ -30,12 +30,12 @@ topic-engine（选题 + 角度）→ **tweet-composer（撰写）** → 人工�
 
 ## 2. Draft 落盘 schema
 
-终稿先落 `/tmp/tweet-composer-draft-YYYY-MM-DD.md`，§9 按这个 schema 核：
+终稿先落 `$STATE_DIR/tweet-composer-draft-YYYY-MM-DD.md`，§9 按这个 schema 核：
 
 ```markdown
 ---
 date / candidate_id / mode: A_single | B_thread | C_thread_from_longform
-content_type: <operations-plan §三 类型名>  pattern: <编号>  source_ref: <模式 C 必填：原文标题/链接>
+content_type: <轴A形态名> · <轴B角色代号>   # 两轴都要, 见 operations-plan §三  pattern: <编号>  source_ref: <模式 C 必填：原文标题/链接>
 # 爆款 5 件套（≥4 项 true）
 first_person_rhetoric / data_anti_consensus / mechanism_breakdown / novel_hook / closing_hook: true|false
 # 标的型必填（点名具体标的时）
@@ -74,6 +74,7 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 
 ### 3.3 独立观点强制
 （新闻/数据/链上/标的类必跑；BREAKING ≤30min 与实测类豁免）
+> ⚠️ **与终检「跟报型首句需绝对级形容词」对撞时，6 维核查优先**：绝对级说法若只有二手来源，**宁可让该终检项 FAIL 并标注，也不把未经行情源核实的数字写成事实**。
 ① 找主流叙事（80% 人的第一反应）→ ② 挖小众视角（时间 / 意图 / 结构 / 反向 / 延伸，五选一）→ ③ **显式句式**"主流读法 X，我的看法 Y"→ ④ **单边判断收尾**。找不到小众视角 = 这选题不该发。
 
 ### 3.4 互动钩子（与单边判断兼容的三式）

@@ -50,11 +50,14 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
 - **crypto 批量必传 `asset_type="crypto"`**（防同名 tradfi 污染，如 BTC→某 ETF），`time_range="1d", limit=2`。
   - 🚨 批量写法：`query="BTC ETH SOL BNB XRP price"` —— 空格拼 symbol 走 query 串，服务端自解析成 keywords（meta 可见 `keywords:[...]`），一次全回。**禁传 `keywords=[...]` 数组**（§2.5）。
   - ⚠️ `time_range` <1d 有 bug（返一个月前数据），小时级用 `interval`。
-- 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD BZUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
+- 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
 - 国债 / 经济日历 / CPI：**不传 `categories` 数组**（会被拒）→ 纯 query 自然语言，如 `query="US 10 year treasury yield curve"` 即返全曲线；FRED 代码同理走 query。
   - ⚠️ **该 query 会触发误抽 + 重复行**（实测）：`curve` 被当成 **Curve 代币 `CRV`**，`keywords` 解析成 `["US","YIELD","CRV"]`，meta 还会报 `asset_type=tradfi 但所有 keyword 落到 crypto 家族`。
   - **后果是返回 3 行内容完全相同的曲线**（每个 keyword 各一行，靠 `_resolved_from_keyword` 区分）。数据本身是对的，但**读之前必须按 `_resolved_from_keyword` 去重**，否则会把同一条曲线当成三个独立数据点。那条 crypto 警告是误报，不用理会。
   - 想避开误抽可改用不含歧义词的写法（如 `query="treasury rates"`），但**去重这一步照做**——多 keyword 解析出来就会多行。
+- ⚠️ **商品符号实测（黄金/原油拿不到一手价）**：`CLUSD` 返 0 结果 · `BZUSD` 在 query 串里**静默丢弃** · `GCUSD` 单调亦返 0 · `OIL`/`GOLD` 别名会解析成 **iPath 原油 ETN / Gold.com 股票**（不是商品）。
+  **可用替代**：原油走 `USO`（WTI 近月期货 ETF，**代理指标非现货**，引用须标口径）；黄金优先试 `query="gold price"` 拿 `GCUSD` 行（会同时命中 Gold.com 股票，按 symbol 筛）。
+  🔒 **拿不到就按「价格数据铁律」处理**：简报标「未取到一手价」，**禁止引用新闻里的涨跌幅当数据**。
 - **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；⚠️ **返回行不含 `marketCap`**（实测：只有 symbol/name/price/change/changesPercentage），**必须二次批量快照补市值**后再按 ≥$1B 过滤，否则杠杆 ETF（BITO/SOXL/TSLL/NVD 等）会混进候选。另需按 name 剔 ETF/杠杆产品——正则 `ETF|ETN|UltraPro|Ultra|Leveraged|\dX|Bull|Bear|Daily`，⚠️ 只判 "ETF" 单词会漏（`ProShares UltraPro QQQ` 不含该字串）。`biggest gainers/losers` 端点全是仙股与数据错误，**禁用**。
 - **tradfi 降级路径**：行情端点（quote / historical_chart / most_actives）同时 403 → 实时价改用 `mcp__tradingview__yahoo_price`（symbol 直传 `^GSPC ^IXIC ^VIX GC=F CL=F` 及个股；偶发 SSL 瞬断重试 1 次即恢复），简报实时数据区**必须标「替代源」**；异动榜无替代 → 留空标注。
 - **crypto 备援**：`mcp__okx__market_get_ticker`（`instId` 如 `BTC-USDT`）；启用时同样标「替代源」，首次启用前先实测一个 symbol 交叉核对。
@@ -208,7 +211,7 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 - **单源 BREAKING**（地缘 / 政治 / 军事 / 监管）：≥2 个相互独立信源确认才可 timeliness ≥4，否则强制 cap 3 + 标 `⚠️单源待验证`。浏览模式 firehose 来的 BREAKING 一律先按单源。
 
 ### 5.3 candidates schema
-必填：`id` / `title`(≤30字) / `one_liner`(≤80字含核心数字) / `category`(crypto|tech|investing|macro) / `source_type` / `source_list`(main|tech|master|external) / `is_kol_target` / `first_seen_ts_ms` / `raw_signals`(engagement_twitter + engagement_other + diffusion_minutes + cross_source_count) / `scores` / `tags` / `schema_version`。无 `notes` 字段——交叉信号 / 风险写进 `one_liner`。
+必填：`id` / `title`(≤30字) / `one_liner`(**≤110字**含核心数字；**预算优先级：核心数字 > 事件 > 交叉信号**，放不下就砍交叉信号别砍数字) / `category`(crypto|tech|investing|macro) / `source_type` / `source_list`(main|tech|master|external) / `is_kol_target` / `first_seen_ts_ms` / `raw_signals`(engagement_twitter + engagement_other + diffusion_minutes + cross_source_count) / `scores` / `tags` / `schema_version`。无 `notes` 字段——交叉信号 / 风险写进 `one_liner`。
 - **`exclusive_details` 只给 BREAKING 候选**：≥2 条且分属不同类型（时间线拼图 / 量级换算 / 细节放大 / 时间巧合 / 跨语言共识），同主题撞车升 ≥3。非 BREAKING 禁加。
 - **`source_list` 按真实来源标，不准图省事全填 `external`**（复发坑）：在某条 list-Agent 输出里出现过 → 标该 list；只有真从 firehose / TG / metrics 来、未在任一 list 出现的才算 external。⚠️ **CT firehose 不是三个 list 之一 → 它来的候选一律 `external`**（曾把 7 条 CT 半导体料误标成 list 来源）。
 - **`source_handle`**（`source_list ∈ {main,tech,master}` 必填）：让它冒出来的 @用户名（不带 @，与回执 `handles` 同源）。自查 ⑪.d 交叉验：必须 ∈ 该 list 回执的 `handles`，否则 WARN。把 source_list 准确性从自律变机检。

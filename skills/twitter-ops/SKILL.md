@@ -15,7 +15,8 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 **任何模式启动前，先读这三份文件，检查是否还是模板。**
 
-判据很简单：**文中出现 `[你的` / `[数字]` / `[待填` / `[例：` 这类方括号占位符，就是没填。**
+判据：**出现 `[你的` / `[数字]` / `[待填` / `[例：` 方括号占位符，或 `___` / `@___` 下划线占位符，就是没填。**
+⚠️ 两种形态都要检——`config.md` 用的是 `___`，只认方括号会把空的 config.md 判成已填直接放行。
 
 | 文件 | 没填的后果 |
 |---|---|
@@ -30,7 +31,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 🚧 检测到配置尚未初始化，先花几分钟把这几项填上，否则跑出来的东西用不了。
 
 必填（不填没法跑）：
-1. operations-plan.md §一「账号」—— 你的 @handle。所有自家数据分析都锚在它上面
+1. **config.md 的 `ACCOUNT`** —— 你的 @handle。所有自家数据分析都锚在它上面（这是唯一权威，别填到别处）
 2. operations-plan.md §七「风险红线」—— 什么绝对不能发
 3. operations-plan.md §二「每日配额」—— 每天出几条
 
@@ -58,7 +59,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ### ⚠️ 账号锚定红线
 
-**MCP 登录账号 ≠ 运营账号**：登录账号只决定"能不能发推"，不决定"分析谁的数据"。❌ 调 `whoami` 拿 username 当分析对象；✅ 所有拉自家数据的调用（performance-review / engagement / competitor-watch 基线）一律锁 operations-plan 写死的 `@[你的账号]`，跑之前先打印 `🎯 当前运营账号：@[你的账号] / followers：[实测值]` —— 锚错了整轮数据全废。
+**MCP 登录账号 ≠ 运营账号**：登录账号只决定"能不能发推"，不决定"分析谁的数据"。❌ 调 `whoami` 拿 username 当分析对象；✅ 所有拉自家数据的调用（performance-review / engagement / competitor-watch 基线）一律锁 **`config.md` 的 `ACCOUNT`**（唯一权威，operations-plan §一 只做展示不做取值），跑之前先打印 `🎯 当前运营账号：@[你的账号] / followers：[实测值]` —— 锚错了整轮数据全废。
 
 ### MCP 数据源
 
@@ -97,7 +98,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 **trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`（刷新档 `-HHMM`） ③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
 
-**topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（对应 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度
+**topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（**两轴都标**：轴 A 形态 + 轴 B 角色，见 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度
 
 **tweet-composer**：① 7 项入参齐 ② 字符预算（单推 ≤280 加权；Thread 逐条核）③ 反向风险在**正文**里而不只在 metadata ④ 配图方案 + 首评草稿齐（完整 15 项见 tweet-composer §9）
 
