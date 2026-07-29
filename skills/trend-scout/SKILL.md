@@ -65,7 +65,9 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
 
 ### 2.2 news
 - **firehose**：不传 query，`time_range="1d"（首扫）/"4h"（刷新）, limit=25, source_lang=<NEWS_LANG>`。
-- **Telegram 资金流遥测（1 次广拉，主进程直调）**：**不传 `sources=["telegram"]` 数组**（会被拒）→ **无 sources 广拉**：`news(time_range="1d"/"4h", limit=20-25)` + **空 query**；firehose 的 `social[]` 天然含 TG provenance 条目（`tg_kol_feeds`）。
+- > ⚠️ **`NEWS_LANG` 留空时，firehose 与下方 TG 广拉塌缩成同一次调用**（参数完全相同）——**只调一次即可**，两条腿的产物都从这一次的 `articles[]` + `social[]` 里取，别重复调浪费额度。
+
+**Telegram 资金流遥测（1 次广拉，主进程直调）**：**不传 `sources=["telegram"]` 数组**（会被拒）→ **无 sources 广拉**：`news(time_range="1d"/"4h", limit=20-25)` + **空 query**；firehose 的 `social[]` 天然含 TG provenance 条目（`tg_kol_feeds`）。
   - 🚫 **绝不传 `source_lang`**：TG item 的 `source_lang` 全是空串 `""`，传语言值会把数据全筛光、连续多天误报「源已降级」。
   - 判 TG 真挂：广拉返回里 `tg_kol_feeds` 条目为 0 才是真挂；有任一返回即源活着。
   - **产物只喂简报「资金流」区，不产候选、不做 consensus 聚合**。取两类：**大额转账**（金额 + 方向，挑 ≥$30M 或与当日候选实体相关的，佐证「解锁→交易所 = 实锤抛压」类叙事）、**清算簇**（按主流币聚合多空方向与量级，佐证多空强弱）。**剔** memecoin 喊单 / 赌球 / 与 firehose 重复的头条。
