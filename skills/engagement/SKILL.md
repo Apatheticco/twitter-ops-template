@@ -20,7 +20,7 @@ description: "Twitter 互动运营 — Outbound 抢热评换曝光 + Inbound 评
 **① 账号锚定**：所有拉自家数据的调用一律用 `config.md` 的 `ACCOUNT`（**唯一权威**）。
 仓库根目录 `config.md` 找不到或 `ACCOUNT` 仍是 `@___` → **停下来让用户先填**，别拿占位符去调 API。
 
-**② 目录**：落盘走 `config.md` 的 `STATE_DIR`（留空则用默认 `~/.claude/state/`）。**别用 `/tmp`**——重启即清。
+**② 目录**：落盘走 `config.md` 的 `STATE_DIR`（留空则用默认 `~/.claude/state/`）。🔴 **指向 `/tmp` 直接停下来报错**——重启即清，跨天资产全丢。这是硬检查不是提示。
 
 **③ 🔑 名单类文件「存在但仍是占位符」= 视同没有**：
 本 Skill 依赖的 reference 文件出厂时**都存在**，内容却是 `@[账号1]` / `[例：…]` / 无标记的默认百分比。

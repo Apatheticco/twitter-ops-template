@@ -1,5 +1,7 @@
 # 受众画像 & 账号诊断
 
+<!-- INIT-STATUS: template-default — 出厂占位，未经用户填写。填好后删掉这一行。 -->
+
 > ⚠️ 初始化模板 — 运行 performance-review 后自动填充
 > 也可以手动导入 Twitter Analytics 后台数据
 

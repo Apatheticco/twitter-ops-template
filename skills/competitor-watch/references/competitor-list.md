@@ -1,5 +1,7 @@
 # 监控名单
 
+<!-- INIT-STATUS: template-default — 出厂占位，未经用户填写。填好后删掉这一行。 -->
+
 > ⚠️ **初始化文件** — 全是占位符，**填你自己的账号**。SKILL.md 的周扫、performance-review 的 Step 0 行业基线、选题环节的撞车查重都读这张表。
 
 名单只有两类角色（含义见 SKILL.md 开头）：**🎯 BENCHMARK = 老师**（学 voice / hook / Pattern），**📏 BASELINE = 坐标**（只取基线数字，不学 voice，不互动）。

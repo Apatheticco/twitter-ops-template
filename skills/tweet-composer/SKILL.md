@@ -10,6 +10,24 @@ topic-engine（选题 + 角度）→ **tweet-composer（撰写）** → 人工�
 
 > 🔴 **全手动发推**：本 Skill 只出终稿，不 hook 任何发推 MCP。发布永远由人确认后手动执行。
 
+
+## 0. 配置与初始化（本 Skill 可被直接触发，不经调度器）
+
+⚠️ 用户可能直接说「帮我写条推文」而不走 `twitter-ops`，调度器闸门**不会执行**。以下三条本 Skill 自查：
+
+**① 账号锚定**：`config.md` 的 `ACCOUNT` 是唯一权威。仍是 `@___` → 停下来让用户先填。
+**② 目录**：草稿落 `config.md` 的 `STATE_DIR`（留空用默认 `~/.claude/state/`）。🔴 **不得指向 `/tmp`**——重启即清，这是硬性检查不是提示。
+**③ 🔑 依赖文件"存在但仍是占位符"= 视同没有**：
+本 Skill 依赖 `voice-guide.md` / `audience-profile.md`，两者出厂**都存在**但全是 `[…]` 占位或带
+`<!-- INIT-STATUS: template-default -->` 状态位 → **一律按未配置处理**。
+
+> 🔴 **最要紧的一条：阈值缺失时禁止执行破坏性动作。**
+> §6 的「第一人称占比越线砍稿」和 §8 的「ER 到不了良好档砍稿」，其阈值在出厂文件里**根本不存在**
+> （`第一人称` / `良好` 两词全仓只出现在本文件）。找不到就是没配置——
+> **只提示、只标注，不许砍稿重写**。拿自己编的阈值执行不可逆动作，比不检查更糟。
+
+---
+
 ## 0. 输入分支（先判模式）
 
 | 模式 | 输入 | 入场检查 | 差异 |
@@ -117,7 +135,10 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 ## 6. 红线（绝对禁区）
 
 不预测价格（"会涨到 X"）/ 不给投资建议 / 不把未验证消息当事实 / 不人身攻击（嘲讽观点 ≠ 攻击个人）/ 不碰政治敏感（除非直接影响市场）/ 不晒单、不泄露个人资产 / 不删已发推文（除非事实错误）。
-第一人称占比与标志词（口头禅 / 粗口）频率上限见 `twitter-ops/references/voice-guide.md` —— 越线 = 账号定位滑向个人 IP，砍掉重写。
+第一人称占比与标志词（口头禅 / 粗口）频率上限见 `twitter-ops/references/voice-guide.md` —— 越线 = 账号定位滑向个人 IP。
+> 🔴 **阈值不存在时不许砍稿**：voice-guide 出厂**没有这一节**，找不到数值就是没配置。
+> 此时**只在输出附一句「第一人称占比未设上限，未做该项检查」，不得砍掉重写**——
+> 破坏性动作绝不能建在自己编出来的阈值上。
 
 ## 7. X 算法适配
 
@@ -132,7 +153,9 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 
 - **反重叠**：vs 当日已发清单，角度 / 数据 / 钩子三维查重
 - **频次预算**：日上限见 `twitter-ops/references/operations-plan.md` §二（默认 普通日 ≤3 / 重大日 ≤5 / 突发日 ≤7），到上限硬叫停；达不到预期曝光门槛的素材不发
-- **ER 预判**：按内容类型历史基线（`performance-review/references/audience-profile.md`），到不了"良好"档砍掉重写
+- **ER 预判**：按内容类型历史基线（`performance-review/references/audience-profile.md`），到不了"良好"档 → 提示优化
+  > 🔴 **基线不存在时不许砍稿**：audience-profile 出厂是 `[待数据验证]`，跑过 `performance-review` 才有值。
+  > 无基线 → **只提示不执行**，输出标注「无历史基线，ER 预判未做」。
 - **时段**：Thread 与主力推文各放黄金窗口（`twitter-ops/references/content-calendar.md`）；放大器 = 话题劫持 2-3h 窗口 / Thread 末条 @ 1-2 个相关 KOL
 
 ## 9. 终检清单（任一 FAIL 不准出稿）
