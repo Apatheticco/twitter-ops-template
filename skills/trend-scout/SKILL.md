@@ -77,7 +77,9 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
 | `LIST_IDS.tech` | 跨界传导源 | 首扫 + 刷新 ⚡P0 |
 | `LIST_IDS.master` | 投资大佬本人 / 追踪号 | 仅首扫（24h <3 条 → 追加取最新扩 top5+3 并标「⚠️大佬安静」）|
 
-P0：首扫三栈必须全部成功（失败重试 1 次，真失败简报标 ❌ 且当次刷新强制补），**永远不允许"节流跳过"**。
+P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1 次，真失败简报标 ❌ 且当次刷新强制补），**永远不允许"节流跳过"**——规则约束的是「不许偷偷少扫已配置的源」，不是「必须凑满三条」。
+- **配置了几条就查几条**：`LIST_IDS` 只填了 1 条 → P0 就是这 1 条；一条没填 → **整条 list 腿跳过**，简报的来源区标注「list 未配置」，自查 ②/⑪.a 记 `n/a` 而非 FAIL，**不阻塞下传 topic-engine**。
+- ⚠️ 但**已配置却扫失败**仍然是硬 FAIL——这是本条规则真正要防的：源配了却静默漏扫，简报看起来正常实则缺了一整个信息面。
 
 **🚨 端点铁律（误用不报错、只静默丢数据）**
 ```
@@ -241,7 +243,7 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 
 FAIL 必须补做，**不准下传 topic-engine**。建议固化成脚本 + 一份配置（板块名 / section 标记 / list_id 集中一处），改配置即同时改模板与自查，避免三处漂移。
 
-① `BOARDS` 板块全列 ② P0 三栈 list 标记齐 ③ 候选数 floor（首扫 ≥12 / 刷新 ≥7）④ schema 必填完整 ⑤ 简报模板锚点未漂 ⑥ `source_list` / `is_kol_target` 已填 ⑦ 9 个 section 齐 ⑧ TG 审计凭证（≥1 次真实广拉）⑨ state 文件（last-refresh + history）已写 ⑩ 零废弃工具调用（只用 §2 白名单内的） ⑪ 工具调用审计（⑪.a 三栈回执齐即 PASS；⑪.d `source_handle` ∈ 回执 `handles`，WARN-only）⑫ age gate 已执行（无 >48h 陈货入池）。
+① `BOARDS` 板块全列（未配置记 n/a）② P0 list 标记齐（**以 `config.md` 实际配置的条数为准**；一条没配记 n/a） ③ 候选数 floor（首扫 ≥12 / 刷新 ≥7）④ schema 必填完整 ⑤ 简报模板锚点未漂 ⑥ `source_list` / `is_kol_target` 已填 ⑦ 9 个 section 齐 ⑧ TG 审计凭证（≥1 次真实广拉）⑨ state 文件（last-refresh + history）已写 ⑩ 零废弃工具调用（只用 §2 白名单内的） ⑪ 工具调用审计（⑪.a 三栈回执齐即 PASS；⑪.d `source_handle` ∈ 回执 `handles`，WARN-only）⑫ age gate 已执行（无 >48h 陈货入池）。
 
 **叙事清单维护**：T1 刷新重算评分 / T2 每日 `BOARDS` 全扫 / T3 每次扫描落盘 `narrative-watchlist-YYYY-W##.json`（非清单板块满足 ≥3 KOL + 跨语言 + cluster ≥5 时累积）与 `narrative-deathnote-*.json`（连续 4 周 <2.0）/ T4 每月 1 号出审计 prompt，用户拍板增删 `BOARDS`（新增板块**必须同时写定义句**）。
 
