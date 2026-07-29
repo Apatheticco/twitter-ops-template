@@ -95,7 +95,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ## 3. 节点验收 lint（缺项不准下传）
 
-**trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `/tmp/trend-scout-candidates-YYYY-MM-DD-HHMM.json` ③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
+**trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`（刷新档 `-HHMM`） ③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
 
 **topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（对应 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度
 

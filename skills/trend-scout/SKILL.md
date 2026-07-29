@@ -205,7 +205,7 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 - **`exclusive_details` 只给 BREAKING 候选**：≥2 条且分属不同类型（时间线拼图 / 量级换算 / 细节放大 / 时间巧合 / 跨语言共识），同主题撞车升 ≥3。非 BREAKING 禁加。
 - **`source_list` 按真实来源标，不准图省事全填 `external`**（复发坑）：在某条 list-Agent 输出里出现过 → 标该 list；只有真从 firehose / TG / metrics 来、未在任一 list 出现的才算 external。⚠️ **CT firehose 不是三个 list 之一 → 它来的候选一律 `external`**（曾把 7 条 CT 半导体料误标成 list 来源）。
 - **`source_handle`**（`source_list ∈ {main,tech,master}` 必填）：让它冒出来的 @用户名（不带 @，与回执 `handles` 同源）。自查 ⑪.d 交叉验：必须 ∈ 该 list 回执的 `handles`，否则 WARN。把 source_list 准确性从自律变机检。
-- 🚨 **文件必须双写**：主副本 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`（持久）+ 拷贝 `/tmp/trend-scout-candidates-YYYY-MM-DD.json`（兼容既有读取方）；刷新档 `-HHMM.json` 同规则，`-latest.txt` 索引双写。
+- 🚨 **只写持久目录，不要写 `/tmp`**：`$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`；刷新档 `YYYY-MM-DD-HHMM.json` 同目录；索引 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD-latest.txt` 内容为当次 json 的绝对路径。**下游（topic-engine / twitter-ops lint）一律从这里读，全仓不存在第二个候选池位置。**
   单写 `/tmp` 的后果：机器重启即清空，回填静默退化成全 null（不报错）、topic-engine 出选题直接扑空、打分-效果回验的 join 源消失。**修 `/tmp` 易失性问题时，要把同目录所有跨天资产一起清点，而不是只搬报错的那个。**
 
 **5.4 标签体系**（写 `tags` 数组，不加 schema 字段）：`⚡加速`(年轻+快速积累) / `🔗聚合事件`(同实体 ≥2 条合并，engagement 累加) / `📅pre-event`(macro 且 12h 内高影响日历，timeliness +1) / `📈升温`(同 entity velocity >3× 上轮) / `🔥潜热`(首发+共振+高 reply 等 ≥2 信号) / `🌉跨界传导`(如 半导体↔矿企 / 黄金↔BTC / VIX↔加密 / 利率↔风险资产) / `🌊narrative` / `🆕周新增` / `BREAKING` / `✅多源确认` / `⚠️单源待验证`。

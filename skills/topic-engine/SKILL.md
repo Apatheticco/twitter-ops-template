@@ -15,7 +15,7 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 | `BENCHMARK_KOLS` | 层 B 对标白名单·标杆组（3-5 个同语种同赛道优质账号） |
 | `BASELINE_KOLS` | 层 B 对标白名单·基线组（2 个更挑、更策展的媒体/策展号） |
 | `CATEGORY_CAP` | 单赛道周上限，如「Crypto ≤25%」 |
-| `MAIN_ENGINE_TYPES` | 你的主引擎内容类型代号 + 周配额（在 `twitter-ops/references/operations-plan.md` 里定义，本文用 `#主引擎` / `#跟报` / `#叙事` 指代） |
+| `MAIN_ENGINE_TYPES` | **战略角色**代号（轴 B），值填在 `config.md`，配额定义见 `twitter-ops/references/operations-plan.md` §三·轴 B。本文用 `#主引擎` / `#跟报` / `#叙事` 指代。⚠️ 与该文件轴 A 的**内容形态**（锐评/数据分析等）是两个正交维度，一条推文两个都要标，别混用 |
 | `WORK_DIR` | 落盘目录。**跨周文件（quota-$WEEK）必须落在持久目录，别放 `/tmp`**（重启即清） |
 | `BRIEF_DIR` | trend-scout 简报目录（选题表追加到这里） |
 
@@ -45,7 +45,7 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 
 ## 2. 输入
 
-- **强制**：读 `<候选目录>/trend-scout-candidates-YYYY-MM-DD-latest.txt` → candidates.json（首扫 ≥12 / 刷新 ≥7）。**禁止跳过 json 直接读简报挑话题**。
+- **强制**：读 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD-latest.txt`（该文件内容为当次 candidates json 的绝对路径）→ candidates.json（首扫 ≥12 / 刷新 ≥7）。`STATE_DIR` 取自 `config.md`，**与 trend-scout 写入的是同一个目录**。**禁止跳过 json 直接读简报挑话题**。
 - 简报 Markdown 仅作上下文（分歧矩阵 / 宏观 / 社区风向）；用户突发点名可越过 json。
 - json 缺失 / 数量不足 → 不允许自己挑话题，要求重跑 trend-scout。
 - 处理范围：按 raw_score 降序取前 `max(8, 60%)` 条。
@@ -159,7 +159,7 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 | `topic-engine-readlog-$DATE.txt` | 第零步 Read 凭证 |
 | 简报追加 `## 🏆 选题表 · HH:MM` | 7 段：元信息 / 一览表(12 列) / 多样性 / 配额警示 / 5 个选题块(共 15 角度) / 执行序 / 接驳；frontmatter `modes` 加"选题" |
 
-> **latest 索引兜底**：若上游只写了无日期戳的 `-latest.txt`，本 skill 落盘时补写 `echo <候选json路径> > <候选目录>/trend-scout-candidates-$DATE-latest.txt`。
+> **latest 索引兜底**：若上游只写了无日期戳的 `-latest.txt`，本 skill 落盘时补写 `echo <候选json绝对路径> > $STATE_DIR/trend-scout-candidates/$DATE-latest.txt`。
 
 ## 10. 输出前自查（任一不过禁止输出，补做重跑）
 
