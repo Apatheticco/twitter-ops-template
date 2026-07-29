@@ -1,5 +1,7 @@
 # 内容日历
 
+<!-- INIT-STATUS: template-default — 出厂默认值，未经用户确认。用户改过本节后请删掉这一行。 -->
+
 > 通用模板，根据你的 operations-plan.md 调整
 
 ---

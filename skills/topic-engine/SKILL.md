@@ -27,6 +27,7 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 
 核心价值 = **3 角度备选 + Pattern 匹配 + 多样性校验**。
 **禁止**：直接出推文（那是 tweet-composer 的活）/ 每选题只给 1 角度 / 角度缺 5 要素 / 无 Pattern 编号 / 无 3 角度对比表 / 无打分明细 / 无 Top 5 一览表 / 无多样性校验 / 跳过第零步 / Top 5 少于 5 条 / 只落盘不追加简报。
+> 🔑 **readlog 必须落 schema**：每份 reference 一行 `{file, status: filled|partial|placeholder|missing, escape_fired, skipped_items[]}`。这是占位符规则唯一的机检凭据——只写「已读」等于没有审计轨迹。
 
 用户说"快速选一条" → 不接：本 skill 产出是"选题 + 3 角度 + 打分"，要快条直接调 tweet-composer。
 
