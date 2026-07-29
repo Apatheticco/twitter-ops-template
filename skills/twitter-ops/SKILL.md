@@ -19,7 +19,8 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 | 文件 | 没填的后果 |
 |---|---|
-| `references/operations-plan.md` §一 | 账号锚定拿到字面量 `@[你的账号]`，**所有拉自家数据的调用直接失败** |
+| **`config.md` 🔴 三项** | `ACCOUNT` 空 → 所有拉自家数据的调用直接失败；目录变量空 → 候选池无处落盘，下游选题扑空 |
+| `references/operations-plan.md` §一 | 账号定位缺失，选题无法判断是否跑题 |
 | `references/operations-plan.md` §二 §七 | 不知道该出几条、什么不能发 —— 会一直出稿且不设红线 |
 | `references/voice-guide.md` | 产出没有你的味道，或模型自行脑补一个人设 |
 
@@ -61,7 +62,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ### MCP 数据源
 
-所有 MCP 调用走 `mcp__followin__*` 五工具：`metrics`（行情/宏观/基本面）· `news`（新闻/研报/推文）· `signal`（KOL 喊单/巨鲸/内部人）· `twitter`（账号级操作）· `subscription`（自选盯盘）。美股 / 大宗 / 宏观必传 `asset_type="tradfi"`，加密传 `"crypto"`；`news` 必带 `query`；`twitter` 走 `action` 路由（如 `action="user_tweets", user_name="[你的账号]"`）。
+所有 MCP 调用走 `mcp__followin__*` 五工具：`metrics`（行情/宏观/基本面）· `news`（新闻/研报/推文）· `signal`（KOL 喊单/巨鲸/内部人）· `twitter`（账号级操作）· `subscription`（自选盯盘）。美股 / 大宗 / 宏观必传 `asset_type="tradfi"`，加密传 `"crypto"`；`news` 的 query **可空**（空 query = firehose 取 trending，实测正常返回）；`twitter` 走 `action` 路由（如 `action="user_tweets", user_name="[你的账号]"`）。
 
 ## 1. 模式控制
 

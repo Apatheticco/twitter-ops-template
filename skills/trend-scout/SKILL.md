@@ -52,7 +52,7 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
   - ⚠️ `time_range` <1d 有 bug（返一个月前数据），小时级用 `interval`。
 - 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD BZUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
 - 国债 / 经济日历 / CPI：**不传 `categories` 数组**（会被拒）→ 纯 query 自然语言，如 `query="US 10 year treasury yield curve"` 即返全曲线；FRED 代码同理走 query。
-- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；返回行自带 `marketCap`，**客户端自己按 ≥$1B 过滤**。`biggest gainers/losers` 端点缺 marketCap、全是仙股，**禁用**。
+- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；⚠️ **返回行不含 `marketCap`**（实测：只有 symbol/name/price/change/changesPercentage），**必须二次批量快照补市值**后再按 ≥$1B 过滤，否则杠杆 ETF（BITO/SOXL/TSLL/NVD 等）会混进候选。另需按 name 剔 ETF/杠杆产品——正则 `ETF|ETN|UltraPro|Ultra|Leveraged|\dX|Bull|Bear|Daily`，⚠️ 只判 "ETF" 单词会漏（`ProShares UltraPro QQQ` 不含该字串）。`biggest gainers/losers` 端点全是仙股与数据错误，**禁用**。
 - **tradfi 降级路径**：行情端点（quote / historical_chart / most_actives）同时 403 → 实时价改用 `mcp__tradingview__yahoo_price`（symbol 直传 `^GSPC ^IXIC ^VIX GC=F CL=F` 及个股；偶发 SSL 瞬断重试 1 次即恢复），简报实时数据区**必须标「替代源」**；异动榜无替代 → 留空标注。
 - **crypto 备援**：`mcp__okx__market_get_ticker`（`instId` 如 `BTC-USDT`）；启用时同样标「替代源」，首次启用前先实测一个 symbol 交叉核对。
 - 🚨 **候选 one_liner 里的涨跌幅必须经行情源核实后才可下传**——新闻 / KOL 转述的百分比一律视为二手（实测偏差可达一倍，且常把盘中峰值当收盘）。
@@ -151,7 +151,7 @@ RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 开头的�
 ```
 单批次全并发（一条 message）：
   主进程直调：metrics(crypto 批量) · metrics(tradfi 按需 4-12 单调) · metrics(国债/宏观 query)
-              metrics(most_actives，客户端过滤 mc≥$1B) · news(firehose) · news(TG 广拉 1 次)
+              metrics(most_actives → 二次补市值后过滤 mc≥$1B) · news(firehose) · news(TG 广拉 1 次)
   Agent 并行：A 主list · B 科技list · C 大师list · D CT firehose 过滤
               F Wave2B（议员/内部人快照，仅本周首个无缓存日建缓存[不限周几]；
                 有缓存日不派 F、主进程直接读）

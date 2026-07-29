@@ -37,17 +37,33 @@ claude mcp add followin https://mcp.followin.io/v2/mcp --scope user --transport 
 
 ```bash
 git clone https://github.com/Apatheticco/twitter-ops-template.git
-cp -r twitter-ops-template/skills/* ~/.claude/skills/
+cd twitter-ops-template
+
+# ⚠️ 先看看会不会覆盖你已有的 skill
+ls ~/.claude/skills/ 2>/dev/null | grep -E "trend-scout|topic-engine|tweet-composer|performance-review|competitor-watch|engagement|twitter-ops"
+
+# 没有输出 → 安全，直接拷
+cp -rn skills/* ~/.claude/skills/
+
+# 有输出 → 说明同名 skill 已存在。先备份再拷：
+# cp -r ~/.claude/skills ~/.claude/skills.bak && cp -r skills/* ~/.claude/skills/
 ```
+
+> ⚠️ **`-n` 不能省。** 本模板的 skill 名是通用词（trend-scout / topic-engine 等），
+> 很容易和你已有的撞名。不带 `-n` 的 `cp -r` 会**静默覆盖**，你已经调好的配置就没了。
 
 ## 初始化（必做）
 
 装完直接说「跑一轮」，**它会先拦住你**——检测到配置还是模板时，调度器不会往下跑，
 而是告诉你缺哪几项、怎么填。所以你不用先背下面这张表，装完直接跑，它会引导。
 
-> 想先看看效果不填配置也行：说**「只扫热点」**。这一步不依赖账号配置，能跑通就说明 MCP 接好了。
+**最少要填的是 [`config.md`](./config.md) 里标 🔴 的三项**（你的账号 + 两个目录路径），
+其中两个已给默认值，实际只需填账号一项。填完就能跑「只扫热点」验证 MCP 通不通。
 
-这套 Skill 是**模板**，里面所有账号相关的位置都是空的。跑之前至少填这三份：
+> ⚠️ **一项都不填是跑不动的。** 各 Skill 有自查规则，缺关键配置时会主动拦下并拒绝下传，
+> 这是设计如此——宁可不跑，也不出一份基于占位符的垃圾产出。
+
+除 `config.md` 外，还有三份**内容型**配置需要填：
 
 | 文件 | 填什么 | 不填的后果 |
 |---|---|---|
