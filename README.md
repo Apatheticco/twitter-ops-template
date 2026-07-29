@@ -1,200 +1,148 @@
 # Twitter Ops Workflow
 
-> 基于 Claude Code 的 Twitter 日运营 AI Agent 工作流框架
-> 适用于任何 Twitter/X 账号的内容运营
+**一套跑在 Claude Code 上的 Twitter 日运营工作流**——把「扫热点 → 选题 → 写稿 → 互动 → 复盘」这条链路拆成 7 个可组合的 Skill，用真实市场数据驱动，每一步都可以人工接管。
+
+面向**加密 / 宏观 / 美股方向的内容账号**。
 
 ---
 
-## 这是什么
+## 它替你干的活
 
-一个 **1 个主调度器 + 11 个子 Skill** 的 Twitter 运营系统。覆盖从热点采集、选题、撰写、互动、竞对监控到数据复盘的完整运营闭环。
+一个人做账号运营，每天的固定开销是：
 
-所有 Skill 以 Markdown 文件（`SKILL.md`）形式存在，Claude Code 读取后按流水线逻辑串联执行。
+翻十几个信息源看今天有什么值得说的 → 判断哪几条你真能接上话 → 写成推文 → 去别人帖子下留有价值的评论 → 处理自己评论区 → 周末复盘哪条数据好、为什么。
+
+这套东西把这条链路做成流水线：**数据从 MCP 实时拉，判断按预设规则跑，稿子出到终稿为止——但发布永远由你按下按钮。**
 
 ---
 
 ## 前置要求
 
-### MCP 工具（数据源）
+| | |
+|---|---|
+| **客户端** | Claude Code（其他支持 MCP + Markdown 指令的客户端也可，需自行适配格式）|
+| **MCP** | [Followin MCP](https://followin.io/en/mcp) —— 用到其中 4 个工具：`metrics`（行情/宏观/基本面）· `news`（新闻/社媒/研报）· `signal`（KOL 喊单/持仓/内部人）· `twitter`（推特读写）|
 
-| MCP Server | 用途 |
-|------------|------|
-| **Followin MCP** | 热门话题、热门快讯、频道内容 |
-| **Premium MCP** | Twitter 数据、加密价格、美股、宏观、新闻 |
+接入（Claude Code）：
 
-需要在 Claude Code 中配置这两个 MCP Server。
-
----
-
-## 初始化指南
-
-clone 后需要初始化以下文件，填入你的账号信息：
-
-| 步骤 | 文件 | 说明 |
-|------|------|------|
-| 1 | `skills/twitter-ops/references/voice-guide.md` | 定义你的人设和语气风格 |
-| 2 | `skills/twitter-ops/references/operations-plan.md` | 定义运营目标和发布节奏 |
-| 3 | `skills/competitor-watch/references/competitor-list.md` | 添加竞对账号 |
-| 4 | `skills/engagement-manager/references/kol-targets.md` | 添加 KOL 互动目标 |
-
-以下文件可以通过 Claude 自动生成（推荐）：
-
-| 文件 | 生成方式 |
-|------|---------|
-| `audience-profile.md` | 说 "帮我分析账号数据" 或提供 Twitter Analytics CSV |
-| `vault.md` | 说 "帮我建立素材库"，Claude 会扫描历史推文 |
-| `patterns.md` | 与 vault.md 同时生成 |
-| `kol-targets.md` | 说 "帮我分析历史互动对象"，可自动从数据提取 |
-
----
-
-## 快速开始
-
-### 跑一轮完整流水线
-
-| 你说的话 | 效果 |
-|---------|------|
-| "跑一轮" / "自动跑" | 自动模式 — 全程自动决策，直接输出终稿 |
-| "手动跑一轮" | 手动模式 — 每个检查点暂停，等你确认 |
-
-### 两种模式
-
-**自动模式**：热点采集 → 自动选 Top 3 → 自动匹配角度 → 出稿 → 终稿展示
-
-**手动模式**：热点采集 → ⏸️ 你挑话题 → ⏸️ 你选角度 → ⏸️ 你审草稿 → 终稿
-
-两种模式可随时切换——自动模式下发送任何消息，就会暂停变成手动。
-
-### 单独使用某个功能
-
-| 你说的话 | 调用的 Skill | 干什么 |
-|---------|-------------|--------|
-| "扫一下热点" | trend-scout | 只看当前有什么热点 |
-| "今天发什么" | trend-scout → topic-engine | 热点采集 + 选题排序 |
-| "帮我写推文：[主题]" | tweet-composer | 直接写一条推文 |
-| "突发：[事件]" | 突发快速通道 | 全速出稿，争分夺秒 |
-| "写篇深度文章：[主题]" | deep-write | 长文写作（1000-5000字） |
-| "把这篇拆成Thread" | thread-builder | 长文 → Twitter 线程 |
-| "帮我评论这条：[链接]" | hot-comment | 生成高质量评论 |
-| "看看我评论区" | comment-ops | 评论区分级管理+回复 |
-| "互动规划" | engagement-manager | 今日互动策略 |
-| "竞对在发什么" | competitor-watch | 竞对账号监控 |
-| "这周数据怎么样" | performance-review | 数据复盘 |
-| "找灵感" | content-vault | 从爆款素材库找灵感 |
-
----
-
-## 系统架构
-
-```
-                    ┌─────────────────────────────────────────┐
-                    │         twitter-ops（主调度器）            │
-                    │     模式控制 + 检查点 + 流程串联            │
-                    └──────────────┬──────────────────────────┘
-                                   │
-        ┌──────────────────────────┼──────────────────────────┐
-        │                          │                          │
-  ┌─────▼─────┐            ┌──────▼──────┐           ┌───────▼───────┐
-  │ 内容生产    │            │ 互动管理     │           │ 复盘优化      │
-  │ Pipeline   │            │ Pipeline    │           │ Pipeline     │
-  └─────┬─────┘            └──────┬──────┘           └───────┬───────┘
-        │                         │                          │
-   trend-scout              engagement-manager          performance-review
-        ↓                    ├── hot-comment             competitor-watch
-   topic-engine              └── comment-ops             content-vault
-        ↓
-   tweet-composer
-
-                    ┌─────────────────────────────────────────┐
-                    │         独立调用（手动触发）                │
-                    │   deep-write  ·  thread-builder         │
-                    └─────────────────────────────────────────┘
+```bash
+claude mcp add followin https://mcp.followin.io/v2/mcp --scope user --transport http --header "x-api-key: YOUR_API_KEY_HERE"
 ```
 
----
-
-## 12 个 Skill 详解
-
-### 主调度器
-
-| Skill | 位置 | 作用 |
-|-------|------|------|
-| **twitter-ops** | `skills/twitter-ops/` | 串联所有子 Skill，管理模式和检查点 |
-
-### 内容生产流水线
-
-| Skill | 位置 | 作用 | 触发词 |
-|-------|------|------|--------|
-| **trend-scout** | `skills/trend-scout/` | 调用 MCP 采集市场热点 | "扫一下热点" |
-| **topic-engine** | `skills/topic-engine/` | 热点→选题方案，P0-P3排序 | "今天发什么" |
-| **tweet-composer** | `skills/tweet-composer/` | 写出发布级推文 | "帮我写推文" |
-
-### 独立调用
-
-| Skill | 位置 | 作用 | 触发词 |
-|-------|------|------|--------|
-| **deep-write** | `skills/deep-write/` | 1000-5000字深度文章 | "写篇深度文章" |
-| **thread-builder** | `skills/thread-builder/` | 长文→Thread拆解 | "拆成Thread" |
-
-### 互动管理流水线
-
-| Skill | 位置 | 作用 | 触发词 |
-|-------|------|------|--------|
-| **engagement-manager** | `skills/engagement-manager/` | 互动战略规划 | "互动规划" |
-| **hot-comment** | `skills/hot-comment/` | 主动去KOL帖子下评论 | "帮我评论这条" |
-| **comment-ops** | `skills/comment-ops/` | 管理自己推文评论区 | "看看我评论区" |
-
-### 复盘优化流水线
-
-| Skill | 位置 | 作用 | 触发词 |
-|-------|------|------|--------|
-| **competitor-watch** | `skills/competitor-watch/` | 竞对账号监控 | "竞对在发什么" |
-| **performance-review** | `skills/performance-review/` | 数据复盘+优化建议 | "这周数据怎么样" |
-| **content-vault** | `skills/content-vault/` | 爆款素材库管理 | "找灵感" |
+> 数据源只需要这一个 MCP。行情、新闻、TG 频道、KOL 持仓、推特数据都从这里出。
 
 ---
 
-## 文件结构
+## 安装
 
-```
-twitter-ops-workflow/
-├── ARCHITECTURE.md          ← 系统架构
-├── README.md                ← 本文件
-└── skills/
-    ├── twitter-ops/         ← 主调度器
-    │   ├── SKILL.md
-    │   └── references/
-    │       ├── voice-guide.md         ← 人设语气（⚠️ 需初始化）
-    │       ├── content-calendar.md    ← 内容日历
-    │       └── operations-plan.md     ← 运营方案（⚠️ 需初始化）
-    ├── trend-scout/
-    ├── topic-engine/
-    ├── tweet-composer/
-    ├── deep-write/
-    ├── thread-builder/
-    ├── engagement-manager/
-    │   └── references/
-    │       └── kol-targets.md         ← KOL列表（⚠️ 需初始化）
-    ├── hot-comment/
-    ├── comment-ops/
-    ├── competitor-watch/
-    │   └── references/
-    │       └── competitor-list.md     ← 竞对列表（⚠️ 需初始化）
-    ├── performance-review/
-    │   └── references/
-    │       └── audience-profile.md    ← 受众画像（可自动生成）
-    └── content-vault/
-        └── references/
-            ├── vault.md               ← 素材库（可自动生成）
-            └── patterns.md            ← 成功模式（可自动生成）
+```bash
+git clone https://github.com/Apatheticco/twitter-ops-template.git
+cp -r twitter-ops-template/skills/* ~/.claude/skills/
 ```
 
+## 初始化（必做）
+
+这套 Skill 是**模板**，里面所有账号相关的位置都是空的。跑之前至少填这三份：
+
+| 文件 | 填什么 | 不填的后果 |
+|---|---|---|
+| `twitter-ops/references/voice-guide.md` | 你的人设、语气、口头禅、不说什么 | 写出来的推文没有你的味道 |
+| `twitter-ops/references/operations-plan.md` | 运营目标、发布频次、内容配比、红线 | 调度器不知道该出多少条、什么能发 |
+| `engagement/references/kol-targets.md` | 你想建立关系的账号，分三层 | 互动模块没有目标 |
+
+另外两份**可以让 Claude 帮你生成**：
+
+| 文件 | 怎么生成 |
+|---|---|
+| `performance-review/references/audience-profile.md` | 说「帮我分析账号数据」，或提供 Twitter Analytics 导出的 CSV |
+| `competitor-watch/references/competitor-list.md` | 说「帮我找对标账号」，或自己按文件里的准入标准填 |
+
+> 💡 `performance-review/references/` 下的 `vault.md`、`patterns.md` 是**产物文件**，随着你每周复盘自己长出来，初始为空是正常的。
+
 ---
 
-## 注意事项
+## 怎么用
 
-1. **发布需人工确认** — 所有模式最终都输出终稿等待人工发布
-2. **deep-write 和 thread-builder 不在自动流水线中** — 需手动触发
-3. **突发事件优先** — "突发：[事件]" 会跳过常规流程全速出稿
-4. **数据量大的 MCP 工具走 Agent 子进程** — trend-scout 内已有规则
-5. **voice-guide 是核心** — 所有推文产出都基于人设语气指南
+### 跑整条流水线
+
+| 你说 | 效果 |
+|---|---|
+| **「跑一轮」** | 自动模式——全程按预设规则决策，直接出终稿 |
+| **「手动跑一轮」** | 手动模式——每个检查点停下来等你确认 |
+
+两种模式**随时可切**：自动模式跑着的时候你发任何一句话，它就在当前节点停下来变成手动。
+
+```
+扫热点 → ①选题 → ②定角度 → 拉最新价格 → 写稿 → ③审稿 → 终稿
+         ⏸        ⏸                              ⏸
+```
+
+### 单独用某一块
+
+| 你说 | 干什么 |
+|---|---|
+| 「扫一下热点」 | 只看现在有什么值得说的 |
+| 「今天发什么」 | 扫热点 + 选题排序 |
+| 「帮我写推文：[主题]」 | 直接出稿 |
+| 「把这篇拆成 Thread」 | 长文 → 推特线程 |
+| 「突发：[事件]」 | 跳过常规流程，全速出稿 |
+| 「今天该跟谁互动」 | 出互动计划 |
+| 「看看我评论区」 | 评论分级 + 回复草稿 |
+| 「竞对在发什么」 | 对标账号本周动作 |
+| 「这周数据怎么样」 | 周复盘 + 优化建议 |
+
+---
+
+## 7 个 Skill
+
+### 调度
+
+| Skill | 作用 |
+|---|---|
+| **twitter-ops** | 串联所有环节，管模式切换、检查点、流程硬锁。**发布必须人工确认**这条红线在这里 |
+
+### 内容生产
+
+| Skill | 作用 | 触发 |
+|---|---|---|
+| **trend-scout** | 多路并行拉市场数据，产出结构化简报。**实时数据区和叙事区强制分开**——硬数字归硬数字，观点归观点 | 「扫一下热点」 |
+| **topic-engine** | 热点 → 可写的角度，按时效/差异化/可信度打分排序 | 「今天发什么」 |
+| **tweet-composer** | 出稿。三种模式：单条 / Thread 原创 / 长文拆 Thread | 「帮我写推文」 |
+
+### 互动
+
+| Skill | 作用 | 触发 |
+|---|---|---|
+| **engagement** | 两头都管：**Outbound** 找高价值帖去留评论，**Inbound** 给自己评论区分级并出回复 | 「今天该跟谁互动」「看看我评论区」 |
+
+### 复盘
+
+| Skill | 作用 | 触发 |
+|---|---|---|
+| **performance-review** | 周复盘：数据、诊断、优化建议，顺手把好稿子入素材库 | 「这周数据怎么样」 |
+| **competitor-watch** | 对标账号监控——学手法，也看自己在坐标系里的位置 | 「竞对在发什么」 |
+
+---
+
+## 几条设计取舍
+
+**发布这一步永远不自动。** 所有模式最终都停在终稿，等你按发布。这不是能力问题，是刻意的——账号是你的。
+
+**数据和观点强制分区。** trend-scout 的简报里，实时数据区只放能追溯到 API 的硬数字，新闻和 KOL 观点一律进叙事区并标注时间。混在一起最容易出的事故是：拿三小时前新闻里的涨跌幅当现价写进推文。
+
+**写稿前会再拉一次价格。** 从扫热点到出稿之间可能过了十几分钟，行情已经变了。
+
+**互动的两头合在一个 Skill 里。** 主动去别人那儿留评论和守自己评论区，用的是同一套目标筛选逻辑和同一套写法库，拆开只会写两遍。
+
+---
+
+## 已知限制
+
+- **只覆盖单账号运营。** 多账号矩阵、跨平台分发不在范围内
+- **互动与复盘模块需要你先填名单**——没有 KOL 目标和对标账号，这两块跑不出东西
+- **数据源单一。** 全部依赖 Followin MCP，它挂了整条链路就停
+- **输出是终稿不是发布。** 没有自动发推能力，也不打算加
+
+## License
+
+MIT

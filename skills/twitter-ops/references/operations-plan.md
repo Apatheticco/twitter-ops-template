@@ -1,7 +1,7 @@
 # 运营方案模板
 
 > ⚠️ 初始化模板 — 请根据你的账号实际情况填写
-> 建议先跑一次 performance-review + content-vault 获取数据后再定制
+> 建议先跑一次 performance-review（复盘 + 内容入库）获取数据后再定制
 
 ---
 

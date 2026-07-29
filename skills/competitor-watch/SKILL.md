@@ -1,167 +1,125 @@
 ---
 name: competitor-watch
-description: "Monitor competitor crypto/macro Twitter accounts — track their content strategy, engagement patterns, topic choices, and growth. Use this skill whenever the user mentions competitor monitoring, competitive analysis, 竞对监控, 竞品分析, what are others tweeting, 同行在发什么, account comparison, benchmark against peers, 对标账号, or any request to analyze or track other crypto/macro Twitter accounts."
+description: "监控外部账号 — 对标账号（学 voice / hook / Pattern）与行业基线（看自己在第几格）分开管理，周频扫描产出可借鉴的爆款拆解和差异化机会。Use when the user mentions 竞对监控, 竞品分析, 对标账号, 同行在发什么, competitor monitoring, competitive analysis, account comparison, benchmark against peers, what are others tweeting, or any request to analyze or track other accounts."
 ---
 
-# 竞对监控 Competitor Watch
+# 监控与对标 Competitor Watch
 
-你的竞对情报助手。追踪同赛道KOL和竞对账号的内容策略、互动数据和增长趋势，为你的运营提供参考。
+⚠️ **名字叫 competitor，但实际不是"和谁竞争"**。外部账号只有两种角色：
 
----
+| 角色 | 心智模型 | 时间投入 | 学什么 | 互动政策 |
+|---|---|---|---|---|
+| 🎯 **BENCHMARK 对标** | **老师** | 80% | 调性 / hook / Pattern / 选题结构 | 个人号可互动（走 engagement 的 Outbound）|
+| 📏 **BASELINE 基线** | **坐标** | 20% | **只看基线数据**（中位 / 爆款 / WoW），不学 voice | **不互动** |
 
-## 核心定位
+不要用"敌我"框架思考外部账号——**要么是老师，要么是坐标**。
 
-```
-competitor-watch（竞对情报）→ topic-engine（借鉴选题方向）
-                            → engagement-manager（发现互动目标）
-                            → performance-review（对标复盘）
-```
+**基线账号为什么不互动**：它们多是机构/团队号，评论区被搬运号刷屏、作者本人不接 reply，互动收益 ≈ 0，还等于给对方送流量。互动池只放有人格 face 的个人 KOL。
 
-周频为主的分析 skill，不需要每天跑。
-
----
-
-## MCP 工具集
-
-```
-账号基本信息：
-  工具：twitter_user_info / twitter_user_about
-  拿到：粉丝数、发推数、简介、创建时间
-
-最新推文：
-  工具：twitter_user_last_tweets
-  参数：userName="[竞对用户名]", includeReplies=false
-  拿到：近期推文列表（含互动数据）
-
-搜索竞对提到你的推文：
-  工具：twitter_advanced_search
-  参数：query="from:[竞对] [你的用户名或关键词]", queryType="Latest"
-  ⚠️ Agent 子进程处理（数据量大）
-
-批量获取账号信息：
-  工具：twitter_batch_user_info
-  参数：userNames="[逗号分隔的用户名列表]"
-  拿到：批量粉丝数对比
-```
+> **数据源**：Followin MCP 的 `twitter` 工具，走 `action` 路由（另外 4 个工具 `metrics`/`news`/`signal`/`subscription` 本 Skill 基本用不到）。
 
 ---
 
-## 工作流
+## 1. 名单
 
-### 1. 竞对账号管理
+名单存 `references/competitor-list.md`（⚠️ 需初始化）。建议规模：**BENCHMARK 5–6 个 + BASELINE 4–5 个**，超过 12 个既扫不动也读不完。
 
-维护一份监控列表（存储在 `references/competitor-list.md`）：
+选 BENCHMARK 的标准：粉丝量落在你的 **1.3x–10x 甜蜜区**（量级悬殊的顶流是"仰望型"陷阱，学不动也够不着）、定位与你有交集、**并且你真的从他身上抄到过东西**。每月用"最近 30 天有没有实际借鉴痕迹"审一次名单——**零借鉴的账号直接移出，别占位置**。
 
-**账号分类：**
-| 类型 | 说明 | 数量建议 |
-|------|------|---------|
-| 🎯 直接竞对 | 同定位（加密交易+宏观）的中文账号 | 3-5个 |
-| 📊 学习对象 | 做得好的英文加密KOL | 3-5个 |
-| 🏛️ 宏观类 | 宏观交易/经济分析类账号 | 2-3个 |
-| 🆕 新兴账号 | 增长快的新账号，值得观察 | 2-3个 |
+## 2. 周扫
 
-### 2. 内容策略分析
-
-对每个监控账号，定期分析：
-
-**发布模式：**
-- 发推频率（日/周）
-- 发布时间分布
-- 内容类型比例（快讯、分析、线程、meme）
-- 话题覆盖范围
-
-**互动表现：**
-- 平均点赞/转发/评论数
-- 高互动推文的共同特征
-- 互动率（互动数/粉丝数）
-- 粉丝增长趋势
-
-**内容质量：**
-- 信息来源质量（一手源还是转述）
-- 观点独特性
-- 数据使用频率和质量
-- 风格辨识度
-
-### 3. 爆款分析
-
-当竞对账号出现高互动推文时，分析：
+每周固定一天早上跑（可用定时任务注册）：
 
 ```
-### 🔥 爆款推文分析
-
-**账号**：@username
-**推文**："[内容摘要]"
-**数据**：❤️ X | 🔄 X | 💬 X
-
-**爆款原因分析**：
-1. 话题：[为什么这个话题火]
-2. 角度：[独特切入点是什么]
-3. 时机：[发布时间是否关键]
-4. 格式：[排版/线程/图文]
-
-**你可以怎么借鉴**：
-- 角度A：[你的版本会怎么写]
-- 角度B：[反向/补充角度]
-- 注意：不要抄袭，要有自己的独特观点
+1. 拉每个账号 user_tweets（覆盖 7 天，必须翻 cursor）
+2. 取 7 天内非 reply 推 → 算 中位 / max / >10K 条数 / Top 3
+3. 落盘 JSON，标 vs 上周 Δ%
 ```
 
-### 4. 差异化洞察
+| 用途 | 写法 |
+|---|---|
+| 账号信息（粉丝/简介/存活） | `twitter(action="user_info", user_name="X")` |
+| 近期推文 | `twitter(action="user_tweets", user_name="X", include_replies=false)` + `cursor` 翻页 |
+| 批量粉丝对比 | `twitter(action="batch_user_info", user_ids="id1,id2")`（**传数字 ID，不是用户名**）|
+| 对方有没有提到你 | `twitter(action="search", query="from:对方 你的关键词", query_type="Latest")` |
 
-定期（每周）输出差异化报告：
+⚠️ 数据量大，**走 Agent 子进程 + jq 汇总**。`user_tweets` 首页只有约 20 条，高频号一周要翻好几页；翻不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`。
+
+**账号存活性检查（每次必做）**：`user_info` 返回 not found，**或**最新推距今 >30 天 → 报警「疑似停更/改名，需人工核实 handle」，**禁止标 N/A 了事**。停更账号采到的是死数据，会连续多周被误读成"我们的采集出问题了"。核实后更新名单。
+
+### 输出 schema
+
+```json
+{
+  "week": "YYYY-Www",
+  "scanned_at": "ISO8601",
+  "accounts": {
+    "账号": {
+      "role": "BENCHMARK | BASELINE",
+      "followers": 0,
+      "this_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0},
+      "prev_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0},
+      "wow_median_pct": 0, "wow_count_pct": 0,
+      "top3": [{"text": "...", "views": 0, "pattern": "模式名"}]
+    }
+  },
+  "industry_verdict": "普跌 | 普涨 | 分化",
+  "best_learnable": [{"account": "X", "tweet": "...", "views": 0, "lesson": "一句可执行的启发"}]
+}
+```
+
+### 兜底硬规则
+
+定时任务会漏跑——没注册成功、机器关机、任务静默失败都很常见。**下游读这份数据前必须先检查文件在不在，不在就当场 inline 补扫**。别假设"文档里写了自动跑"就等于真的跑了；定时是快路径，兜底补扫才是不漏的保证。
+
+## 3. 分析
+
+**发布模式**：频率、时间分布、内容类型比例、话题覆盖范围。
+**互动表现**：中位/平均互动、高互动推的共同特征、互动率、粉丝增长趋势。
+**内容质量**：信息源是一手还是转述、观点独特性、数据使用密度、风格辨识度。
+
+⚠️ **看中位不看平均**，并且**同时看发文量 Δ% 和中位 Δ%**——加量 +50% 而中位 -18% 是摊薄，不是内容变差。
+⚠️ **逆势上涨的账号要交叉验互动率**：views 涨但 Top3 只有个位数点赞 = 分发侧抬升、不是内容共鸣，**标为不可复用**，别照抄。
+
+### 爆款拆解（每周至少 2 条）
 
 ```
-## 📊 竞对周报 — [日期范围]
-
-### 话题覆盖对比
-| 话题 | 你 | 竞对A | 竞对B | 竞对C |
-|------|---|-------|-------|-------|
-| BTC行情 | ✓ | ✓ | ✓ | ✗ |
-| 链上数据 | ✓ | ✗ | ✓ | ✗ |
-| 宏观分析 | ✓ | ✗ | ✗ | ✓ |
-| [空白区] | ✗ | ✗ | ✗ | ✗ |
-
-### 你的差异化优势
-1. [你做得比竞对好的地方]
-2. [你的独特定位]
-
-### 改进机会
-1. [竞对做得好但你没做的]
-2. [空白区域的机会]
-
-### 本周值得借鉴的爆款
-[2-3条竞对爆款 + 你的借鉴思路]
+### 🔥 @账号 — [推文摘要]
+数据：❤️ X | 🔄 X | 💬 X | 👁 X
+为什么爆：① 话题（为什么这个话题火）② 角度（独特切入点）③ 时机 ④ 格式（排版/线程/图文）
+可借鉴：角度 A（你会怎么写）／角度 B（反向或补充）
+边界：借鉴结构和角度，内容必须原创
 ```
 
-### 5. 实时追踪
+### 周报骨架
 
-设置关键词追踪，发现竞对动态：
-- 竞对提到你账号的推文
-- 竞对讨论你覆盖过的话题（看观点异同）
-- 竞对的粉丝增长异常（可能有爆款或推广）
+```
+## 竞对周报 — 日期范围
+### 数据对照表（含发文量 Δ% + 中位 Δ%，自家一行加粗）
+### 话题覆盖对比（你 / 各账号 → 找出全员空白区）
+### 你的差异化优势（2 条）
+### 改进机会（他们做得好而你没做的）
+### 本周值得借鉴的爆款（2–3 条 + 借鉴思路）
+```
 
----
+**周报的重点是「老师本周教了什么 voice / Pattern」**，基线数据只占一张表，不是分析主线。
 
-## 与上下游的衔接
+## 4. 下游
 
-### → 输出给
-- **topic-engine**：竞对爆款话题 → 借鉴选题方向（用不同角度写）
-- **engagement-manager**：竞对账号列表 → Outbound 互动目标
-- **performance-review**：竞对数据 → 对标复盘基准
+- **选题环节**：读 `best_learnable` 借鉴方向；同时用名单做**撞车查重**——同主题对标账号刚发过就砍掉或换角度。查 BENCHMARK 是"避免和老师撞"，查 BASELINE 是"避免和行业地板撞"。
+- **performance-review**：读周扫数据做 Step 0 行业基线（不用每次重拉）。
+- **engagement**：**只有 BENCHMARK 里的个人号**能进互动名单，BASELINE **永远不进**。
 
-### ← 接收
-- **engagement-manager**：互动中发现的新兴竞对账号 → 加入监控列表
-- **trend-scout**：热点话题 → 检查竞对是否已覆盖
-
----
+← 反向输入：互动中发现的新账号 → 评估后加入名单；热点扫描 → 检查对标账号是否已覆盖该话题。
 
 ## 关键原则
 
-- **学习不抄袭**：借鉴策略和角度，但内容必须原创
-- **关注差异化**：找到竞对没覆盖的空白区域
-- **数据说话**：用互动数据判断什么有效，而非主观感觉
-- **不要过度焦虑**：竞对分析是参考，不是枷锁
-- **定期而非实时**：每周一次深度分析就够，不需要时刻盯着
+- **学习不抄袭**：借鉴策略和角度，内容必须原创。
+- **两种角色别混**：从老师身上学 voice，从坐标身上只取数字。
+- **零借鉴 = 该移出名单**：名单是工具不是收藏夹。
+- **数据说话**：用互动数据判断什么有效，不靠主观感觉。
+- **定期而非实时**：每周一次深度分析就够，天天盯着只会焦虑。
 
-## 参考资源
+## 参考文件
 
-查看 `references/competitor-list.md` 管理你的监控账号列表。
+- `references/competitor-list.md` — 监控名单（⚠️ 需初始化：填你自己的对标与基线账号）
