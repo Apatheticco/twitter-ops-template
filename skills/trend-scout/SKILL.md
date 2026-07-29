@@ -52,6 +52,9 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
   - ⚠️ `time_range` <1d 有 bug（返一个月前数据），小时级用 `interval`。
 - 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD BZUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
 - 国债 / 经济日历 / CPI：**不传 `categories` 数组**（会被拒）→ 纯 query 自然语言，如 `query="US 10 year treasury yield curve"` 即返全曲线；FRED 代码同理走 query。
+  - ⚠️ **该 query 会触发误抽 + 重复行**（实测）：`curve` 被当成 **Curve 代币 `CRV`**，`keywords` 解析成 `["US","YIELD","CRV"]`，meta 还会报 `asset_type=tradfi 但所有 keyword 落到 crypto 家族`。
+  - **后果是返回 3 行内容完全相同的曲线**（每个 keyword 各一行，靠 `_resolved_from_keyword` 区分）。数据本身是对的，但**读之前必须按 `_resolved_from_keyword` 去重**，否则会把同一条曲线当成三个独立数据点。那条 crypto 警告是误报，不用理会。
+  - 想避开误抽可改用不含歧义词的写法（如 `query="treasury rates"`），但**去重这一步照做**——多 keyword 解析出来就会多行。
 - **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；⚠️ **返回行不含 `marketCap`**（实测：只有 symbol/name/price/change/changesPercentage），**必须二次批量快照补市值**后再按 ≥$1B 过滤，否则杠杆 ETF（BITO/SOXL/TSLL/NVD 等）会混进候选。另需按 name 剔 ETF/杠杆产品——正则 `ETF|ETN|UltraPro|Ultra|Leveraged|\dX|Bull|Bear|Daily`，⚠️ 只判 "ETF" 单词会漏（`ProShares UltraPro QQQ` 不含该字串）。`biggest gainers/losers` 端点全是仙股与数据错误，**禁用**。
 - **tradfi 降级路径**：行情端点（quote / historical_chart / most_actives）同时 403 → 实时价改用 `mcp__tradingview__yahoo_price`（symbol 直传 `^GSPC ^IXIC ^VIX GC=F CL=F` 及个股；偶发 SSL 瞬断重试 1 次即恢复），简报实时数据区**必须标「替代源」**；异动榜无替代 → 留空标注。
 - **crypto 备援**：`mcp__okx__market_get_ticker`（`instId` 如 `BTC-USDT`）；启用时同样标「替代源」，首次启用前先实测一个 symbol 交叉核对。
@@ -87,7 +90,9 @@ P0：首扫三栈必须全部成功（失败重试 1 次，真失败简报标 �
 **⚠️ 分页丢块（未解决）**：翻多页时**页内密集、页间凭空缺整段时间**，是 API 分页丢块不是 list 停更。→ **判 list 产能只用最新一页的连续头块，禁止用「全量条数 ÷ 全量跨度」算日均**（名义 1.32 条/天 vs 头块 6.7 条/天，差 5 倍）。
 
 ### 2.4 signal
-- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：走 query 串，如 `query="congress senator stock purchase disclosure"`（`categories` 数组禁用）。返回可能超长 → 落盘文件再抽；剔掉税务代扣类条目再判信号；空信号标 `empty_no_signal`，不阻塞。
+- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：走 query 串（`categories` 数组禁用）。返回可能超长 → 落盘文件再抽；剔掉税务代扣类条目再判信号；空信号标 `empty_no_signal`，不阻塞。
+  - ⚠️ **`signal` 的 query 串不做数据类型路由**（实测）：传 `query="congress senator stock purchase disclosure"`，`meta.filters_applied.keywords` 回 **null**，返回的是**默认全类 fanout**（insider_trading + institutional + kol_call + trader_position），而 `insider_trading` 里全是 `provenance:"corporate_insider"` 的 Form 4，**一条议员交易都没筛出来**。
+  - **想要议员交易只能客户端筛**：拿到 `insider_trading` 后按 `provenance` 字段自己分流，别指望用自然语言描述让服务端替你过滤。**query 写得再具体也不改变返回内容**——这是白花心思。
 - crypto `kol_call` / `trader_position`：**`ACCOUNT_ENGINES` 不含"喊单 / 实盘跟单"则默认关闭**（低差异化、长期 0 候选），突发模式用户明确要"看巨鲸/实盘"时例外；加密交易向账号可全开。
 
 ### 2.5 MCP 类型铁律
