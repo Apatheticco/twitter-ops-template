@@ -32,7 +32,7 @@ twitter(action="user_tweets", user_name="你的账号", include_replies=true)
 
 | 堆 | 判据 | 用途 |
 |---|---|---|
-| **转推** | `text` 以 `RT @` 开头 | **整堆丢弃**，不进任何口径 |
+| **转推** | `text` 以 `RT @` 或 `RT@` 开头 | **整堆丢弃**，不进任何口径 |
 | **自己的 reply** | `inReplyToUserId` 非空 | 互动方向、作者回复率 |
 | **原推** | 其余 | 中位 / max / ER / Top 3 / 入库 |
 
@@ -86,7 +86,7 @@ API 拿不到折叠区，精确 spam 比例测不出来。可用的间接证据�
 
 ### 6. 对标账号数据
 
-同样的 `user_tweets` + 分页，只取窗口内**非 reply 且非转推**（`text` 不以 `RT @` 开头，见 §1）的原创推，
+同样的 `user_tweets` + 分页，只取窗口内**非 reply 且非转推**（`text` 不以 `RT @` / `RT@` 开头，见 §1）的原创推，
 算日均发推数 / 中位 views / max views。**对标账号这一步比自家更要紧**——搬运型账号的首页可能大半是转推，
 不剔就等于拿别人的数据当同行基线。**走 Agent 子进程 + jq 汇总**，原始 payload 别进主上下文。高频号（单日 ≥10 推）翻页够不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`。
 

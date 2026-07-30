@@ -47,7 +47,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 ## 1. 过程纪律（违规即重跑）
 
 核心价值 = **3 角度备选 + Pattern 匹配 + 多样性校验**。
-**禁止**：直接出推文（那是 tweet-composer 的活）/ 每选题只给 1 角度 / 角度缺 5 要素 / 无 Pattern 编号 / 无 3 角度对比表 / 无打分明细 / 无 Top 5 一览表 / 无多样性校验 / 跳过第零步 / Top 5 少于 5 条 / 只落盘不追加简报。
+**禁止**：直接出推文（那是 tweet-composer 的活）/ 每选题只给 1 角度 / 角度缺 5 要素 / 无 Pattern 编号 / 无 3 角度对比表 / 无打分明细 / 无 Top 5 一览表 / 无多样性校验 / 跳过第零步 / 只落盘不追加简报 / **凑不满 5 条时静默交付**（⚠️ 「必须满 5 条」不是硬规则——候选不够时按 §8 降级到 Top 3 并显式警告是**合规**的；违规的是**不声明就少给**）。
 > 🔑 **readlog 必须落 schema**：每份 reference 一行 `{file, status: filled|partial|placeholder|missing, escape_fired, skipped_items[]}`。这是占位符规则唯一的机检凭据——只写「已读」等于没有审计轨迹。
 
 用户说"快速选一条" → 不接：本 skill 产出是"选题 + 3 角度 + 打分"，要快条直接调 tweet-composer。
@@ -189,12 +189,12 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 `BENCHMARK_KOLS + BASELINE_KOLS` × `twitter(action="user_tweets")` 近 24h → 落盘 `<WORK_DIR>/topic-engine-layer-b-$DATE.json`（含 `scan_timestamp`，<2h 复用缓存）。EXPECTED_KOL 数从配置派生，**勿写死**。
 
 - **必抽数**：单账号原始返回 65-172K 字符 → **Agent 子进程内立刻 jq** 抽 `text`(280字) / `userName` / `createdAt` / `viewCount`；per-account cap：媒体号 20、个人 KOL 30。子进程返回 >10K 字符 → 拒收重跑。**禁止跳过基线组省 token。**
-- **🔴 必须剔转推**：jq 抽取时就把 `text` 以 `RT @` 开头的条目滤掉（`include_replies=false` **只过滤回复不过滤转推**，同 performance-review 采样总则）。
+- **🔴 必须剔转推**：jq 抽取时就把 `text` 以 `RT @` 或 `RT@` 开头的条目滤掉（`include_replies=false` **只过滤回复不过滤转推**，同 performance-review 采样总则）。
   **这里漏剔的后果最狠**：对标账号**转的别人的推**会被算成"标杆已发"，
   配上基线组再一命中就是 🔴 双 hit ——**"直接砍，永不豁免"**。
   于是你的选题被一条**别人的转推**砍掉，而砍的理由在输出里看起来完全成立。
   回执里加 `"retweets_dropped": <数>`，自查按它判有没有真剔。
-- **🧾 子进程回执（必做）**：只数自己写进 json 的 `scanned_kols` 长度 = 手写几个名字就能过、零真扫凭据。修复：主进程先生成 `SCAN_TS`（ms epoch，与 `scan_timestamp` 同值）显式传给每个层 B Agent；**每个 Agent 扫完 + jq 后用 Bash 落回执** `<WORK_DIR>/topic-engine-lb-receipt-<userName>-$DATE.json` = `{"userName":"…","raw_count":<原始推文数>,"scan_ts":<SCAN_TS>}`。自查按 `scan_ts == layer-b.scan_timestamp 且 (raw_count>0 或 scanned_empty)` 计 distinct KOL 数，须 ≥ EXPECTED_KOL，否则 FAIL。
+- **🧾 子进程回执（必做）**：只数自己写进 json 的 `scanned_kols` 长度 = 手写几个名字就能过、零真扫凭据。修复：主进程先生成 `SCAN_TS`（ms epoch，与 `scan_timestamp` 同值）显式传给每个层 B Agent；**每个 Agent 扫完 + jq 后用 Bash 落回执** `<WORK_DIR>/topic-engine-lb-receipt-<userName>-$DATE.json` = `{"userName":"…","raw_count":<原始推文数>,"retweets_dropped":<剔掉的转推数>,"scan_ts":<SCAN_TS>}`。自查按 `scan_ts == layer-b.scan_timestamp 且 (raw_count>0 或 scanned_empty) 且 retweets_dropped 是实数` 计 distinct KOL 数，须 ≥ EXPECTED_KOL，否则 FAIL。
   - **`scanned_empty`**：某 KOL 近 24h 真没发推（API 滞后 / 账号安静）→ 回执加 `"scanned_empty": true`，用来区分"扫了·窗口内 0 条"（合法）与"压根没扫"（缺回执）；只看 `raw_count>0` 会把两者混为一谈（空返回 ≠ 源挂）。`layer-b.json` **必须含 ms epoch 的 `scan_timestamp`**（回执绑定依赖它）。
 - **4 标签**：🟢 独家（0 命中）/ 🟡 标杆已发（可借鉴角度）/ 🟠 基线已发（需差异化）/ 🔴 双 hit（**直接砍，永不豁免**）。
 - **层 A 免费信号**：trend-scout 主 list 内自然出现的对标推文先查一遍（无额外调用）。
@@ -203,7 +203,9 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 
 ## 8. Top 5 输出与配比
 
-- **Top 5 硬下限**；候选 3-4 → 降级 Top 3 + 警告；<3 → 拒绝出选题给三选项。极端可 Top 6（分差 <0.1 或豁免触发）。
+- **Top 5 是目标不是硬下限**——这里的"候选"指**过滤后可用条数**（≠ §2 的池子总数 12/7，别混）：
+  可用 ≥5 → Top 5；**3-4 → 降级 Top 3 + 显式警告**；<3 → 拒绝出选题给三选项。
+  极端可 Top 6（分差 <0.1 或豁免触发）。降级是合规路径，§1「禁止」列表禁的是**不声明就少给**。
 - **差异化硬约束**：🔴 不进 Top 5；🟢 + 🟡 至少各 1。
   - ⚠️ **`BENCHMARK_KOLS` / `BASELINE_KOLS` 均未配置时本约束记 `n/a`**：无对标账号 → 无从判差异化，所有候选恒为 🟢，「🟡 至少 1」数学上不可满足。此时**跳过本约束、不阻塞 Top 5 产出**，但 Top 5 markdown 与简报必须显式标注「⚠️ 层 B 未配置，差异化未判」——**降级要让人看见，不能静默放行**。
   - 配了名单却扫失败 → 仍是硬 FAIL（同 trend-scout P0 的意图：防的是静默漏扫，不是逼你凑名单）。
@@ -215,7 +217,7 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 - **每条标注**：金字塔档位（**定义就在这一行，不在别的文件里**——★×5 顶层 = 新品首测 / 真 BREAKING；★×4 = 异动 / KOL 冲突 / 宏观×交易；★×3 = 有独家角度的常规题；★×2 底层不上）+ **内容类型代号（轴 B 战略角色，见 operations-plan §三·轴B）** + 预期 views 档位 + 对标借鉴提示。
 - ⚠️ **`CATEGORY_CAP` 未配置时本约束记 `n/a`**（全仓唯一被当硬闸却曾无逃生条款的变量）。**作用域统一为「单批 Top 5 内的单赛道占比上限」**——trend-scout 候选池渲染与本 skill 周统计**都以此为准**，别再各按各的理解。
 - **周配额锚**（operations-plan 权威）：`MAIN_ENGINE_TYPES` 合计 ≥70% / 主引擎 ≥3 条 —— ⚠️ **`ACCOUNT_ENGINES` 未配置时「主引擎 ≥3 条」记 `n/a`**：无引擎定义则无判据认定任何候选属主引擎，该项恒为 0，会每轮吐一个用户消不掉的红色告警——**而告警一旦消不掉，就会训练出对告警的失敏**（trend-scout §7 已就此立过规矩） / 叙事型 2-3 / Bookmark 型 ≥3-4 / 日报 ≤10% / Thread 单批 ≤1。
-- 末尾附：频次预算检查（当日已发 vs `operations-plan.md` §二 的日上限；🔴 **§二 出厂是 `[X] 条` 占位，「普通日/重大日/突发日」这三个词在 operations-plan 里 0 命中**——那是本文曾经自己编的分级，已删。未配置就停下来问用户要一个数字，别编）+ **一次到位决策块**（选哪条 / 什么形式 / 什么时间，三变量一次答）。
+- 末尾附：频次预算检查（当日已发 vs `operations-plan.md` §二 的日上限；🔴 **只认 §二 的「日发推目标：工作日 `[X]` 条」，该节带 `INIT-STATUS` = 视同未配置；时段表/§七的 10 条/engagement 的 1–2 条都不是日上限**。未配置就停下来问用户要一个数字，别拿别处的数字凑）+ **一次到位决策块**（选哪条 / 什么形式 / 什么时间，三变量一次答）。
 
 ## 9. 落盘 + 简报追加
 
@@ -238,7 +240,7 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 
 ## 10. 输出前自查（任一不过禁止输出，补做重跑）
 
-⓪ 第零步文档已读（有 readlog）① 候选池接力（模式自适应 floor）② 层 B 落盘 + ②.r 子进程回执真扫凭据 ③ 配比（`CATEGORY_CAP` / 主引擎 ≥70%）④ Top5 结构完整 ④.5 每个 angle 6 字段齐 ④.6 叙事型周配额 ⑤ 至少 1 条高传播潜力 ⑥ 简报追加（5 块 / 15 角度 / 7 段 / frontmatter）。
+⓪ 第零步文档已读（有 readlog）① 候选池接力（模式自适应 floor）② 层 B 落盘 + ②.r 子进程回执真扫凭据 **+ ②.rt 每份回执 `retweets_dropped` 是实数**（没有它就没人知道剔转推有没有真跑，而漏剔会让别人的转推凑成 🔴 双 hit 直接砍掉你的选题）③ 配比（`CATEGORY_CAP` / 主引擎 ≥70%，**两者未配置各记 n/a 不阻塞**）④ Top5 结构完整（**降级态见 §8：候选 3-4 → Top 3 + 警告，此时 ④ 按"已按 §8 降级并标注"计 PASS**）④.5 每个 angle 6 字段齐 ④.6 叙事型周配额 ⑤ 至少 1 条高传播潜力 ⑥ 简报追加（5 块 / 15 角度 / 7 段 / frontmatter）。
 
 ## 11. 接驳
 

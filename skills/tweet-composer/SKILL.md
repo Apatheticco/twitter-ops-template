@@ -47,8 +47,8 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 > | §8 ER「良好」档 | 原写 audience-profile | `ER` / `基线` **0 命中**；真实槽位在 voice-guide 且是 `[待数据填充]` |
 > | §频次预算 曝光门槛 | 无 | `曝光门槛` 全仓只出现在提出它的那一行 —— **已删除该规则** |
 >
-> ⚠️ **一个例外：§频次预算的日上限不走"只标注放行"**。operations-plan §二 出厂也是 `[X] 条`
-> （`普通日/重大日/突发日` 同样 0 命中），但它是**必填配置**而不是质量阈值，
+> ⚠️ **一个例外：§频次预算的日上限不走"只标注放行"**。operations-plan §二 的
+> 「日发推目标：工作日 `[X]` 条」出厂未填、且整节带 `INIT-STATUS`，但它是**必填配置**而不是质量阈值，
 > 且 `twitter-ops` §0 已把它列为阻塞项。缺它 → **停下来问用户要一个数字**，
 > 见 §8 频次预算那条。**质量阈值缺失可以放行，量的上限缺失不能。**
 >
@@ -95,7 +95,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 ---
 date / candidate_id / mode: A_single | B_thread | C_thread_from_longform
 content_type: <轴A形态名> · <轴B角色代号>   # 两轴都要, 见 operations-plan §三  pattern: <编号>  source_ref: <模式 C 必填：原文标题/链接>
-# 爆款 5 件套（≥4 项 true）
+# 爆款 5 件套（≥4 项 true）—— 判据见下方，不许凭感觉填
 first_person_rhetoric / data_anti_consensus / mechanism_breakdown / novel_hook / closing_hook: true|false
 # 标的型必填（点名具体标的时）
 single_ticker_focus / authority_position_anchor: true|false|n_a
@@ -111,6 +111,18 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 ## 首评草稿
 [T+5 发的补充数据 / 延展 / 来源]
 ```
+
+**爆款 5 件套的判据**（🔴 少了这张表，这五个布尔就是模型自己填、自己检，**结构上不可能 FAIL**，等于没有这道闸）：
+
+| 字段 | true 的条件 |
+|---|---|
+| `first_person_rhetoric` | 正文出现第一人称判断句（"我的看法是"/"我不同意"/"我看错了"），**不是**只出现"我"字 |
+| `data_anti_consensus` | 至少一个数字**与主流读法方向相反**（"大家在喊涨，但 X 已连续 3 周下降"）；只是引了个数字不算 |
+| `mechanism_breakdown` | 至少一处显式因果链（A → B → C，或"因为 A 所以 B"）；并列陈述三个事实不算 |
+| `novel_hook` | 首句不属于 `references/tweet-styles.md` §5 已列的常见开场型；沿用旧模板填 false |
+| `closing_hook` | 末句命中 §3.4 三式之一（决策矩阵 / 立场挑衅 / 具体反问）；空泛收尾填 false |
+
+判不了的项**填 false 并在输出说明为什么判不了**，不要为了凑 ≥4 填 true。
 
 ## 3. 写作约束
 
@@ -133,7 +145,7 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 
 ### 3.3 独立观点强制
 （新闻/数据/链上/标的类必跑；BREAKING ≤30min 与实测类豁免）
-> ⚠️ **与终检「跟报型首句需绝对级形容词」对撞时，6 维核查优先**：绝对级说法若只有二手来源，**宁可让该终检项 FAIL 并标注，也不把未经行情源核实的数字写成事实**。
+> ⚠️ **与终检 ⑤「跟报型首句需绝对级形容词」对撞时，6 维核查优先**：绝对级说法若只有二手来源，让 ⑤ FAIL 并披露（⑤ 是 [披露] 项，不阻塞出稿），**不把未经行情源核实的数字写成事实**。
 ① 找主流叙事（80% 人的第一反应）→ ② 挖小众视角（时间 / 意图 / 结构 / 反向 / 延伸，五选一）→ ③ **显式句式**"主流读法 X，我的看法 Y"→ ④ **单边判断收尾**。找不到小众视角 = 这选题不该发。
 
 ### 3.4 互动钩子（与单边判断兼容的三式）
@@ -197,8 +209,12 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 
 - **反重叠**：vs 当日已发清单，角度 / 数据 / 钩子三维查重
 - **频次预算**：日上限见 `twitter-ops/references/operations-plan.md` §二。
-  🔴 **该节出厂是 `[X] 条` 占位，「普通日 / 重大日 / 突发日」这三个词在 operations-plan 里 0 命中**——
-  分级是本文件自己编的，目标文件没有。**没读到具体数字就没有上限可言**：
+  🔴 **只认 §二 的「日发推目标：工作日 `[X]` 条」这一行**，且该节带 `INIT-STATUS: template-default`
+  → 按 §0 ④ 视同未配置。
+  ⚠️ **不要退而去别处找数字**：§二 上方的时段表（合计 4–5 条）是配比建议不是上限，
+  §七「单日上限 10 条」是刷屏红线不是日目标，engagement §3.1 的「1–2 条」是它自己那套日类型分级。
+  拿任何一个当日上限都是**用一个用户没确认过的数字去砍真实的稿子**。
+  「普通日 / 重大日 / 突发日」这个三档分级是本文件曾经自己编的，operations-plan 里没有，已删。
   处理方式**和另外三条阈值不同**——它们是质量类（漏掉只是稿子差点，放行是对的），
   **日上限是量类**：漏掉的后果不是稿子差，是无节制发帖。而 `twitter-ops` §0 已经把
   operations-plan §二 列为**必填阻塞项**，两条路径不该给出相反结论。
@@ -214,22 +230,37 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
   没值时只标「ER 基线未配置，未做该项预判」，不改稿。
 - **时段**：Thread 与主力推文各放黄金窗口（`twitter-ops/references/content-calendar.md`）；放大器 = 话题劫持 2-3h 窗口 / Thread 末条 @ 1-2 个相关 KOL
 
-## 9. 终检清单（任一 FAIL 不准出稿）
+## 9. 终检清单
+
+**每项标了 [阻塞] 或 [披露]，两者处理方式不同：**
+
+- **[阻塞]** FAIL → **不准出稿**，改完重检
+- **[披露]** FAIL → **可以出稿，但必须在输出末尾显式写出哪一项没过、为什么**
+
+> 🔴 这个二分是必须的。写「任一 FAIL 不准出稿」听起来更严，实际后果是**规则互相锁死**：
+> §3.3 明说「跟报型绝对级形容词与事实核查 6 维对撞时，宁可让 ⑤ FAIL 并标注」，
+> §0 明说 `content_type` 未配置时「只记未分类并放行，不许因此拒绝出稿」——
+> 两条逃生都被"任一 FAIL"这个标题堵住。**一条永远不可能全过的清单，会被整份忽略。**
 
 ```
-[ ] ① frontmatter 必填齐（mode / content_type / pattern / 跟报标记）
-[ ] ② 字符预算：单推 ≤280 加权 · Thread 逐条 ≤280 · 引用推 ≤160
-[ ] ③ 爆款 5 件套 ≥4/5 为 true
-[ ] ④ 标的型：single_ticker_focus + authority_position_anchor 已判（n_a 需写理由）
-[ ] ⑤ 跟报型首句含绝对级形容词
-[ ] ⑥ BREAKING 三件套齐（缺 → warn）
-[ ] ⑦ 互动钩子命中 §3.4 三式之一，无空泛收尾
-[ ] ⑧ 独立观点显式句式在正文里（豁免类型除外）
-[ ] ⑨ 红线全过（§6）        [ ] ⑩ 外链不在主推
-[ ] ⑪ 配图方案段非空        [ ] ⑫ 首评草稿段非空
-[ ] ⑬ 事实核查 6 维逐条有证据 [ ] ⑭ cashtag / hashtag 数量合规
-[ ] ⑮ 模式 C：原文核心数据无丢失 + 末条是你的判断而非原作者的
+[阻塞] ② 字符预算：单推 ≤280 加权 · Thread 逐条 ≤280 · 引用推 ≤160
+[阻塞] ⑨ 红线全过（§6）
+[阻塞] ⑩ 外链不在主推
+[阻塞] ⑬ 事实核查 6 维逐条有证据
+[阻塞] ⑭ cashtag ≤1 · hashtag ≤1 个 niche（泛品类禁用）
+[阻塞] ⑮ 模式 C：原文核心数据无丢失 + 末条是你的判断而非原作者的
+[阻塞] ⑧ 独立观点显式句式在正文里（豁免类型除外）
+[阻塞] ⑦ 互动钩子命中 §3.4 三式之一，无空泛收尾
+
+[披露] ① frontmatter 必填齐（`content_type` 在两轴未配置时记「未分类」即算过，见 §0）
+[披露] ③ 爆款 5 件套 ≥4/5 为 true（判据见 §2 字段定义；判不了的项写 false 并说明）
+[披露] ④ 标的型：single_ticker_focus + authority_position_anchor 已判（n_a 需写理由）
+[披露] ⑤ 跟报型首句含绝对级形容词（**与 §3.3 事实核查对撞时以 6 维为准，本项标 FAIL 并披露**）
+[披露] ⑥ BREAKING 三件套齐
+[披露] ⑪ 配图方案段非空        [披露] ⑫ 首评草稿段非空
 ```
+
+**[披露] 不是"可以不做"**：它是"做不到时必须说出来"。默默跳过一项 [披露] 和 FAIL 一项 [阻塞] 同样算返工。
 > 可按 §2 schema 写成脚本自动跑；手动过也要逐项过完。
 
 ## 10. 输出格式
@@ -243,5 +274,5 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 ## 11. 写作前路由（grep，不凭记忆）
 
 `twitter-ops/references/`：`voice-guide.md`（调性 / 语言元素）· `operations-plan.md`（红线 / 频次 / 配比）· `content-calendar.md`（时段）
-本 Skill：`references/tweet-styles.md`（风格模板 / hashtag / 线程结构）
+本 Skill：`references/tweet-styles.md`（**只取句式骨架 / 排版 / 线程结构**；hashtag 上限、字数、禁用词、发布时段一律不以它为准，见 §3.5）
 其他：`topic-engine/references/angle-templates.md`（Pattern 与反模式）· `performance-review/references/`：`patterns.md` + `vault.md`（自家爆款句式 / 失败库）· `audience-profile.md`（受众 / ER 基线）· `engagement/references/kol-targets.md`（借嘴人物 / @ 谁）

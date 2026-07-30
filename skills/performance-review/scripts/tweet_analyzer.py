@@ -70,6 +70,22 @@ def load_archive_js(filepath):
     return tweets
 
 
+def _int(row, *keys):
+    """从 CSV 行里取整数。
+
+    `row.get(k, 0)` 在「列存在但单元格为空」时返回 ''，默认值永不生效，
+    int('') 直接抛 ValueError —— 而 CSV 的定位就是"手动整理"，空格是常态。
+    """
+    for k in keys:
+        v = (row.get(k) or '').strip().replace(',', '')
+        if v:
+            try:
+                return int(float(v))
+            except ValueError:
+                pass
+    return 0
+
+
 def load_csv(filepath):
     """加载 CSV 格式"""
     tweets = []
@@ -77,14 +93,14 @@ def load_csv(filepath):
         reader = csv.DictReader(f)
         for row in reader:
             tweets.append({
-                'id': row.get('id', ''),
-                'text': row.get('text', row.get('content', '')),
-                'created_at': row.get('created_at', row.get('date', '')),
-                'likes': int(row.get('likes', row.get('like_count', 0))),
-                'retweets': int(row.get('retweets', row.get('retweet_count', 0))),
-                'replies': int(row.get('replies', row.get('reply_count', 0))),
-                'quotes': int(row.get('quotes', row.get('quote_count', 0))),
-                'impressions': int(row.get('impressions', row.get('impression_count', 0))),
+                'id': row.get('id') or '',
+                'text': row.get('text') or row.get('content') or '',
+                'created_at': row.get('created_at') or row.get('date') or '',
+                'likes': _int(row, 'likes', 'like_count'),
+                'retweets': _int(row, 'retweets', 'retweet_count'),
+                'replies': _int(row, 'replies', 'reply_count'),
+                'quotes': _int(row, 'quotes', 'quote_count'),
+                'impressions': _int(row, 'impressions', 'impression_count'),
             })
     return tweets
 
@@ -128,18 +144,32 @@ def analyze_tweets(tweets):
         tweet['engagement_total'] = tweet['likes'] + tweet['retweets'] + tweet['replies'] + tweet['quotes']
         tweet['engagement_rate'], tweet['rate_is_pct'] = calculate_engagement(tweet)
 
-    # 🔴 混合输入不许跨单位排序：只要有一条缺 impressions，整批降级为绝对互动数。
-    # 否则 1620（绝对数）会和 6.60（百分比）在同一个列表里比大小，
-    # S 级完全由"哪条缺 impressions"决定，与表现无关。
-    if tweets and not all(t['rate_is_pct'] for t in tweets):
-        for tweet in tweets:
-            tweet['engagement_rate'] = tweet['engagement_total']
-            tweet['rate_is_pct'] = False
+    # 🔴 混合输入：分组各自排序，不整批降级、也不跨单位混排。
+    #
+    # 两种错法都试过：
+    #  ① 跨单位混排 → 1620（绝对数）和 6.60（百分比）比大小，S 级由"哪条缺 impressions"决定
+    #  ② 整批降级为绝对数 → 在**主用例上必然触发**（API v2 的 impression_count 只对
+    #     2022-12 之后的推有值，而本脚本自陈用途是"首次建库"= 全量历史），
+    #     于是 ER 分级静默失效，退化成"粉丝多的时期赢"——正是 SKILL.md §6 明令禁止的
+    #     「按 ER 分级不按绝对数」。
+    #
+    # 正解是承认这是两个不可比的群体：各自按自己的口径分级，报告里分开列。
+    has_imp = [x for x in tweets if x['rate_is_pct']]
+    no_imp = [x for x in tweets if not x['rate_is_pct']]
+    if has_imp and no_imp:
+        for cohort in (has_imp, no_imp):
+            _grade_cohort(cohort)
+        # 有 impressions 的排前面（它们的口径才是 ER），组内已各自排好
+        return has_imp + no_imp
 
-    # 按互动率排序
+    return _grade_cohort(tweets)
+
+
+def _grade_cohort(tweets):
+    """在同一口径的群体内排序并打 S/A/B+ 级。"""
+
     tweets.sort(key=lambda x: x['engagement_rate'], reverse=True)
 
-    # 计算百分位
     total = len(tweets)
     if total == 0:
         return tweets
@@ -163,16 +193,29 @@ def analyze_tweets(tweets):
 
 
 def output_report(tweets, output_path=None, rt_dropped=0):
-    """输出分析报告"""
+    """输出分析报告。返回 True = 有产物，False = 无数据。"""
     total = len(tweets)
     if total == 0:
-        print("没有推文数据。")
-        return
+        # 仍然要落文件 + 非零退出码：静默 exit 0 且不产文件，
+        # 会让自动化调用看起来成功而实际什么都没有
+        msg = (f"# 推文分析报告\n\n**没有可分析的推文。**\n\n"
+               f"- 输入剔除转推 {rt_dropped} 条后剩 0 条\n"
+               f"- 若 rt_dropped 等于输入总数，说明输入全是转推\n")
+        print(msg)
+        if output_path:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(msg)
+            with open(output_path.replace('.md', '.json'), 'w', encoding='utf-8') as f:
+                json.dump([], f)
+            print(f"（空报告已写入 {output_path}）")
+        return False
 
-    # 单位不能猜：没有印象数的输入（官方归档）算出来的是绝对互动数，不是百分比
-    is_pct = all(t.get('rate_is_pct') for t in tweets)
+    # 单位不能猜：没有印象数的输入（官方归档 / 2022-12 之前的推）算出来的是绝对互动数
+    n_pct = sum(1 for x in tweets if x.get('rate_is_pct'))
+    is_pct = n_pct == total
+    is_mixed = 0 < n_pct < total
     unit = '%' if is_pct else ''
-    metric_name = '互动率' if is_pct else '绝对互动数'
+    metric_name = '互动率' if is_pct else ('两种口径混合' if is_mixed else '绝对互动数')
 
     avg_rate = sum(t['engagement_rate'] for t in tweets) / total
     s_tier = [t for t in tweets if t['grade'] == 'S']
@@ -183,10 +226,20 @@ def output_report(tweets, output_path=None, rt_dropped=0):
     report.append(f"")
     report.append(f"**分析时间**：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
     report.append(f"**总推文数**：{total}（已剔除转推 {rt_dropped} 条）")
-    report.append(f"**平均{metric_name}**：{avg_rate:.2f}{unit}")
+    if is_mixed:
+        report.append(f"**排序口径**：{metric_name}（分组分级，见下方说明；不给跨组平均值）")
+    else:
+        report.append(f"**平均{metric_name}**：{avg_rate:.2f}{unit}")
     report.append(f"**S级推文**：{len(s_tier)} 条（Top 10%）")
     report.append(f"**A级推文**：{len(a_tier)} 条（Top 25%）")
-    if not is_pct:
+    if is_mixed:
+        report.append(f"")
+        report.append(f"> 🔴 **本批数据有两种口径，已分组独立分级，两组之间不可比。**"
+                      f"{n_pct} 条带 impressions（按互动率 % 分级）、{total - n_pct} 条不带"
+                      f"（只能按绝对互动数分级）。API v2 的 `impression_count` 只对 2022-12 之后的推有值，"
+                      f"全量历史导出必然混两种。**跨组比较 S/A 级没有意义**——"
+                      f"下面每条都标了自己的口径。")
+    elif not is_pct:
         report.append(f"")
         report.append(f"> 🔴 **本次排序口径是绝对互动数，不是互动率。**"
                       f"输入数据没有印象数（impressions），无法算百分比。"
@@ -198,7 +251,9 @@ def output_report(tweets, output_path=None, rt_dropped=0):
     report.append(f"")
     for t in s_tier[:20]:  # 最多展示20条
         text_preview = t['text'][:80].replace('\n', ' ')
-        report.append(f"### [{t['grade']}] {metric_name} {t['engagement_rate']:.2f}{unit}")
+        _u = '%' if t.get('rate_is_pct') else ''
+        _m = '互动率' if t.get('rate_is_pct') else '绝对互动数'
+        report.append(f"### [{t['grade']}] {_m} {t['engagement_rate']:.2f}{_u}")
         report.append(f"**内容**：{text_preview}...")
         report.append(f"**数据**：❤️ {t['likes']} | 🔄 {t['retweets']} | 💬 {t['replies']} | 📊 总互动 {t['engagement_total']}")
         report.append(f"**发布时间**：{t['created_at']}")
@@ -208,7 +263,8 @@ def output_report(tweets, output_path=None, rt_dropped=0):
     report.append(f"")
     for t in a_tier[:20]:
         text_preview = t['text'][:80].replace('\n', ' ')
-        report.append(f"- **[{t['grade']}] {t['engagement_rate']:.2f}{unit}** — {text_preview}...")
+        _u = '%' if t.get('rate_is_pct') else ''
+        report.append(f"- **[{t['grade']}] {t['engagement_rate']:.2f}{_u}** — {text_preview}...")
 
     report_text = '\n'.join(report)
 
@@ -226,6 +282,8 @@ def output_report(tweets, output_path=None, rt_dropped=0):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(vault_entries, f, ensure_ascii=False, indent=2)
         print(f"JSON 数据已保存到：{json_path}")
+
+    return True
 
 
 def main():
@@ -251,7 +309,9 @@ def main():
     print(f"剔除转推 {rt_dropped} 条，进入打分 {len(tweets)} 条")
 
     tweets = analyze_tweets(tweets)
-    output_report(tweets, args.output, rt_dropped=rt_dropped)
+    ok = output_report(tweets, args.output, rt_dropped=rt_dropped)
+    if not ok:
+        sys.exit(2)   # 无产物必须给非零退出码
 
 
 if __name__ == '__main__':

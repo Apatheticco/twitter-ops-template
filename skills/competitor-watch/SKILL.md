@@ -66,7 +66,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 1. 拉每个账号 user_tweets（覆盖 7 天，必须翻 cursor）
 2. 取 7 天内**非 reply 且非转推**的原创推 → 算 中位 / max / >10K 条数 / Top 3
 > 🔴 **必须剔转推**：`include_replies=false` **只过滤回复，不过滤转推**（实测 `@elonmusk` 首页 20 条里 14 条是 `RT @`）。
-> 口径是「非 reply **且非转推**的原创推」——**`text` 以 `RT @` 开头的纯转推一律剔除**（结构解，同 trend-scout）。
+> 口径是「非 reply **且非转推**的原创推」——**`text` 以 `RT @`（或无空格的 `RT@`）开头的纯转推一律剔除**（结构解，同 trend-scout）。
 > 不剔的后果是**静默产出错误数据**：中位数/ER/Top3 全建在别人的推文上（实测 max 11.1M 是一条 `RT @grok`），
 > 而报告数字齐全、格式正确，看不出问题。
 > ⚠️ 连带影响 §3 爆款拆解：不剔转推会把**对标账号转的别人的推**拆成「老师本周的 voice/Pattern」去学。
@@ -177,11 +177,11 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 ## 4. 下游
 
 - **选题环节**：读 `best_learnable` 借鉴方向；同时用名单做**撞车查重**——同主题对标账号刚发过就砍掉或换角度。查 BENCHMARK 是"避免和老师撞"，查 BASELINE 是"避免和行业地板撞"。
-- **performance-review**：读本周扫描文件做 Step 0 行业基线。
-  ⚠️ **但"上周基线"一律由 performance-review 自己重扫，不许复用本文件里的 `prev_week`**——
-  见 `../performance-review/SKILL.md` Step 0 的「🔁 上周基线一律重扫」：
-  上周报告采集时那一周的最后半天还没发完，拿截断快照当基线会**系统性高估本周表现**，
-  甚至翻转结论方向。**WoW 必须来自同一次采集的两个窗口。**
+- **performance-review**：读本文件的 `top3` / `best_learnable` / `industry_verdict` 作**定性**参照。
+  🔴 **数字不给它用**——`this_week` 和 `prev_week` 都不参与它的 WoW 计算。
+  见 `../performance-review/SKILL.md` Step 0：**WoW 的两个窗口必须来自同一次采集**。
+  拿本文件的 `this_week`（最多 7 天前）配它现采的 `prev_week`，就是两次采集拼出来的 Δ%，
+  会**系统性高估本周表现**，甚至翻转结论方向。省那一轮拉取不值得。
 - **engagement**：**只有 BENCHMARK 里的个人号**能进互动名单，BASELINE **永远不进**。
 
 ← 反向输入：互动中发现的新账号 → 评估后加入名单；热点扫描 → 检查对标账号是否已覆盖该话题。

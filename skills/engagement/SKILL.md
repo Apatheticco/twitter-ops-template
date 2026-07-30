@@ -55,7 +55,10 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 | 评论者/KOL 影响力 | `twitter(action="user_info", user_name="X")`；批量用 `batch_user_info`，参数是 **`user_ids`（逗号分隔的数字 ID，不是用户名）** |
 | 推文最新互动数 | `twitter(action="tweets_by_ids", tweet_ids="id1,id2")` |
 | 关系与圈子 | `twitter(action="followers" / "followings" / "check_follow", user_name="X")` — 看对方最近在聊什么找切入点、看共同关注识别圈子 |
-| 评论要引的数据 | 价格 `metrics(categories=["market"])` · 宏观 `metrics(categories=["macro"])` · 链上快讯 `news(query="...", sources=["telegram"])` · KOL 持仓 `signal(categories=["kol_call","trader_position"])` |
+| 评论要引的数据 | 价格 `metrics(query="BTC price")` · 宏观 `metrics(query="US CPI latest")` · 链上快讯 `news(query="…")` · KOL 持仓 `signal(query="kol call trader position")` |
+
+🚨 **数组参数全域禁用**：`keywords` / `categories` / `sources` 这类数组**即使主进程直调也会被序列化成字符串遭 schema 拒**（`["market"] has type "string"` 连环 `-32602`），**没有安全通道**。一律走 `query` 自然语言 / 空格拼串，服务端自解析。
+🚨 **并发上限**：主进程一条 message 里 followin 调用 **≤4 个**（一次发 12 个会有半数 `-32001` 超时）。
 
 ⚠️ **`search` 和评论列表单次可返数万字符，必须走 Agent 子进程**，直接调会打爆上下文。
 ⚠️ **分页**：`user_tweets` / `tweet_replies` 首页只返最近约 20 条，覆盖一整天/一整周必须取 `next_cursor` 续调，直到最老一条早于窗口起点。**"他今天没发推"在翻页确认前不成立。**

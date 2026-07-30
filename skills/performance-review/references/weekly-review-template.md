@@ -17,7 +17,7 @@ period_end: YYYY-MM-DD            # 本期止
 prev_period_start: YYYY-MM-DD     # ⭐ 上期起（硬规则）
 prev_period_end: YYYY-MM-DD       # ⭐ 上期止（硬规则）
 total_tweets: N
-tweet_filter: 非 reply 且非转推（RT @ 开头一律剔除）
+tweet_filter: 非 reply 且非转推（RT @ / RT@ 开头一律剔除）
 retweets_dropped: 0        # 剔掉几条转推，必须实数；写 0 = 声明确实一条都没有
 data_pulled_at: "YYYY-MM-DD HH:MM"
 

@@ -158,7 +158,7 @@ P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1
 ### velocity 双轨 jq（所有 list 统一）
 ```
 velocity = (likeCount + 2*retweetCount + 0.5*replyCount) / max(age_hours, 0.25)
-RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 开头的纯转推 →
+RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 或 "RT@" 开头的纯转推 →
   velocity_final = min(velocity, 本批次非RT贴最高velocity)
   转发仍是背书信号（保留参与排序），但不许凭被转对象的爆款互动霸榜
   （典型病例：自己原创互动个位数~几百，靠 RT 外部爆款借到 5 万赞 velocity）
@@ -249,10 +249,13 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 ## 6. 简报与输出
 
 - **单日单文档** `$BRIEF_DIR/YYYY-MM-DD 每日热点简报.md`：首扫新建，刷新 append `## 🔵 刷新 · HH:MM` + frontmatter 累加 `modes` / `刷新_times` / `last_updated`。
-- **9 个 section 全出**（逐个点名，缺一即自查⑦ FAIL）：
+- **10 个 section 全出**（逐个点名，缺一即自查⑦ FAIL）：
   ① 📊 实时数据区 ② 📰 叙事摘要区 ③ 🌊 叙事热度榜 ④ 🔥 必关注 Top5
-  ⑤ 🗣 KOL / 社媒 ⑥ 📅 事件锚点 ⑦ 🟡 数据源审计 ⑧ 📋 候选池排序表 ⑨ ➡️ 接驳提示
-  —— 写「9 个 section 齐」但不枚举，这条机检就只能靠猜。
+  ⑤ 🗣 KOL / 社媒 ⑥ **💰 资金流**（TG 广拉的大额转账 / 清算簇 + `excluded_pure_trade` 的去处）
+  ⑦ 📅 事件锚点 ⑧ 🟡 数据源审计 ⑨ 📋 候选池排序表 ⑩ ➡️ 接驳提示
+  —— 写「N 个 section 齐」但不枚举，这条机检就只能靠猜；而**枚举漏一个比不枚举更糟**：
+  资金流区一旦不在名单里，TG 那一整腿的产物会被当成"不该存在"整块丢掉，
+  而自查⑧（TG 审计凭证）照样 PASS，因为广拉确实调了。
 - 叙事热度榜 **`BOARDS` 全列**（0 hit 也标），刷新窗口内任一板块 ≥2 新候选必须重算叙事榜。
   必关注 Top5 每条 1 行摘要（数据在表 / candidates，不重复展开）。
 
@@ -268,6 +271,12 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 
   合计封顶 5.0，保留 1 位小数。**0 hit 板块记 0.0，不是 n/a**——deathnote 要的就是连续低分。
   ⚠️ 这四项都必须来自**本次扫描**，不许继承上一轮的分（板块热度是时点量）。
+
+  🔴 **但「周」级消费者要用当周最高分，不是最后一次的分。** 分是时点量，而 deathnote 判的是
+  「连续 4 周 <2.0」——一周内首扫 + 多次刷新会算出好几个分，刷新档的候选 floor 是全板块合计 ≥7，
+  单板块几乎不可能再 ≥3 条，于是**早上 3.5 分的热板块会被晚上刷新重算成 0.5**。
+  规则：`narrative-watchlist-$WEEK.json` 里每个板块记 `score_latest` 和 `score_week_max` 两个值，
+  **deathnote 只看 `score_week_max`**；topic-engine #12 的 ≥3.0 触发看 `score_latest`（它要的是当下热度）。
 - **价格铁律**：当前价只引 metrics 返回值，新闻里的价格是"历史叙述"；实时数据区与叙事区数字不混用。
 - **数据源诚实**：自查 WARN ≥1 → 简报顶部必有 `> 🟡 数据源审计告警` 块显式列降级项；汇报说「N PASS / M WARN / K FAIL」，**禁称"全 PASS"**；某源连续 2 次 degraded → section 顶部显式标注。
 - **宏观事件时间**：写"今晚 / 明晚"前用绝对日历核对（CPI = 每月第二个周三 8:30 ET；非农 = 第一个周五；GDP advance = 季末月最后一周周三 / 四），标 ET + 本地双时间。
