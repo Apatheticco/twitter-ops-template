@@ -33,8 +33,11 @@ twitter(action="user_tweets", user_name="你的账号", include_replies=true)
 | 堆 | 判据 | 用途 |
 |---|---|---|
 | **转推** | **`retweeted_tweet` 非空**（首选结构判据）／ 无该字段则 `text` 以 `RT @`·`RT@` 开头 | **整堆丢弃**，不进任何口径 |
-| **自己的 reply** | `inReplyToUserId` 非空 | 互动方向、作者回复率 |
-| **原推** | 其余 | 中位 / max / ER / Top 3 / 入库 |
+| **自己的 reply** | **`isReply == true`**（或 `inReplyToId` 非空）| 互动方向、作者回复率 |
+| **原推** | 其余（`isReply==false` 且非转推）| 中位 / max / ER / Top 3 / 入库 |
+
+> 🔴 **判 reply 用 `isReply`，不是 `inReplyToUserId` 非空**（实测 dotey：42 条真 reply 里 **13 条(31%) 的 `inReplyToUserId` 是 null**，但 `isReply=true` / `inReplyToId` 有值）。
+> 钉在 `inReplyToUserId` 上会把这 13 条误分进原推堆 → reply 堆少数 45%、原推堆虚高，下面 §2/§3 全部连带低估。
 
 > 🔴 **`include_replies=false` 不过滤转推——两个维度必须分别判。**
 > 实测 `@elonmusk` 首页 20 条里 14 条是 `RT @`，其中一条 `RT @grok` 的 11.1M views 会直接成为 max。
@@ -45,16 +48,18 @@ twitter(action="user_tweets", user_name="你的账号", include_replies=true)
 
 ### 2. 互动方向（对外 : 对内）
 
-对自己的 reply 堆按 `inReplyToUserId` 归类：
+对 reply 堆判「指向自己 vs 指向别人」：
 
-- **对内**：指向自己 → 再分 A 类（回他人在自己推下的评论，算有效互动）和 B 类（自评促推，不算）
-- **对外**：指向别人 → 去别人推文下评论
+- **自身 user_id 直接从 `author.id` 取**（每条推都带，= 你的 numeric id，如 dotey=`3178231`）——**不用额外调 `user_info`**。
+- **对内**：`inReplyToUserId == author.id`；`inReplyToUserId` 为 null 时回溯 `inReplyToId` → 父推 `author.id` 判。再分 A 类（回他人在自己推下的评论，算有效互动）/ B 类（自评促推，不算）。
+- **对外**：其余（指向别人）。
 
-产出 `对外:对内`，>5:1 报 🟡。**对外 reply 的 `inReplyToUsername` 分布就是"这周和哪些 KOL 互动过"的唯一可靠来源**——不统计它就会连续多周误报"0 次互动"。
+产出 `对外:对内`，>5:1 报 🟡。**对外互动对象取 `inReplyToUsername`——但它和 `inReplyToUserId` 同步在 31% 的 reply 上为 null**（实测 dotey 漏掉 13 个互动对象里的全部），所以**必须用 text 开头的 `@handle` 兜底**捞回，否则连续多周误报"0 次互动"、漏报 1/3 互动对象。
 
 ### 3. 作者回复率（严口径）
 
-用 `conversationId` 把自己的 reply 归属回原推，**剔除 `inReplyToUserId = 自己` 的条目**，再数"至少有一条对他人回复"的原推占比。宽口径（不剔自评促推）能虚高一倍以上。
+用 `conversationId` 把自己的 reply 归属回原推，**剔除"指向自己"的条目**（判据同 §2：`inReplyToUserId==author.id` 或回溯父推），再数"至少有一条对他人回复"的原推占比。宽口径（不剔自评促推）能虚高一倍以上。
+> ⚠️ `conversationId` 值齐全可用，但它指向**线程根推**，而根推**常不在本窗口的拉取里**（实测 dotey：22 个对外 reply 里只有 9 个的根在窗口内）。要算稳定分母得**单独回捞窗口外的根推**，否则"至少回复过一次的原推占比"分母不全、结果偏高。
 
 ### 4. 粉丝快照
 
