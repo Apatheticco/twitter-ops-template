@@ -18,7 +18,7 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
 | `CATEGORY_CAP` | 单赛道配比上限，如「Crypto ≤25%」 |
 | `LIST_IDS` | Twitter list 三栈的 `list_id`：`main / tech / master`，不足三条就删对应行 |
 | `BRIEF_DIR` | 简报输出目录 |
-| `STATE_DIR` | 跨天状态目录，默认 `~/.claude/state/`（**别用 `/tmp`**，见 §5.3） |
+| `STATE_DIR` | 跨天状态目录，默认 `~/.claude/state/`（**别用 `/tmp`**——重启即清，后果见 `config.md`）|
 | `NEWS_LANG` | firehose 语言，`zh-cn` / `en` |
 | `KOL_WHITELIST` | 对标 KOL 白名单（`is_kol_match` 用，5-8 个） |
 | `BOARDS` | 叙事热度榜板块清单 + **每板块一句定义** |
@@ -72,14 +72,9 @@ NOW_MS=$(( $(date +%s) * 1000 ))
   - 🚨 批量写法：`query="BTC ETH SOL BNB XRP price"` —— 空格拼 symbol 走 query 串，服务端自解析成 keywords（meta 可见 `keywords:[...]`），一次全回。**禁传 `keywords=[...]` 数组**（§2.5）。
   - ⚠️ `time_range` <1d 有 bug（返一个月前数据），小时级用 `interval`。
 - 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
-- 国债 / 经济日历 / CPI：**不传 `categories` 数组**（会被拒）→ 纯 query 自然语言，如 `query="US 10 year treasury yield curve"` 即返全曲线；FRED 代码同理走 query。
-  - ⚠️ **该 query 会触发误抽 + 重复行**（实测）：`curve` 被当成 **Curve 代币 `CRV`**，`keywords` 解析成 `["US","YIELD","CRV"]`，meta 还会报 `asset_type=tradfi 但所有 keyword 落到 crypto 家族`。
-  - **后果是返回 3 行内容完全相同的曲线**（每个 keyword 各一行，靠 `_resolved_from_keyword` 区分）。数据本身是对的，但**读之前必须按 `_resolved_from_keyword` 去重**，否则会把同一条曲线当成三个独立数据点。那条 crypto 警告是误报，不用理会。
-  - 想避开误抽可改用不含歧义词的写法（如 `query="treasury rates"`），但**去重这一步照做**——多 keyword 解析出来就会多行。
-- ⚠️ **商品符号实测（黄金/原油拿不到一手价）**：`CLUSD` 返 0 结果 · `BZUSD` 在 query 串里**静默丢弃** · `GCUSD` 单调亦返 0 · `OIL`/`GOLD` 别名会解析成 **iPath 原油 ETN / Gold.com 股票**（不是商品）。
-  **可用替代**：原油走 `USO`（WTI 近月期货 ETF，**代理指标非现货**，引用须标口径）；黄金优先试 `query="gold price"` 拿 `GCUSD` 行（会同时命中 Gold.com 股票，按 symbol 筛）。
-  🔒 **拿不到就按「价格数据铁律」处理**：简报标「未取到一手价」，**禁止引用新闻里的涨跌幅当数据**。
-- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；⚠️ **返回行不含 `marketCap`**（实测：只有 symbol/name/price/change/changesPercentage），**必须二次批量快照补市值**后再按 ≥$1B 过滤，否则杠杆 ETF（BITO/SOXL/TSLL/NVD 等）会混进候选。另需按 name 剔 ETF/杠杆产品——正则 `ETF|ETN|UltraPro|Ultra|Leveraged|\dX|Bull|Bear|Daily`，⚠️ 只判 "ETF" 单词会漏（`ProShares UltraPro QQQ` 不含该字串）。`biggest gainers/losers` 端点全是仙股与数据错误，**禁用**。
+- 国债 / 经济日历 / CPI：纯 query 自然语言（`query="US 10 year treasury yield curve"` 即返全曲线）。🔴 **读之前必须按 `_resolved_from_keyword` 去重**——多 keyword 解析会返回内容相同的多行，不去重会把同一条曲线当三个独立数据点（细节见 `references/source-list.md` §MCP 坑位）。
+- **商品（黄金/原油）拿不到一手价**：四个符号里只有替代源可用，口径必须标注 → 见 §MCP 坑位。🔒 拿不到就按「价格数据铁律」标「未取到一手价」，**禁引用新闻里的涨跌幅当数据**。
+- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，🔴 **返回不含 `marketCap`，必须二次批量补市值再按 ≥$1B 过滤 + 按 name 剔 ETF/杠杆**（不做的话杠杆 ETF 会混进候选；正则见 §MCP 坑位）。`biggest gainers/losers` **禁用**。
 - **tradfi 降级路径**：行情端点（quote / historical_chart / most_actives）同时 403 → 实时价改用 `mcp__tradingview__yahoo_price`（symbol 直传 `^GSPC ^IXIC ^VIX GC=F CL=F` 及个股；偶发 SSL 瞬断重试 1 次即恢复），简报实时数据区**必须标「替代源」**；异动榜无替代 → 留空标注。
 - **crypto 备援**：`mcp__okx__market_get_ticker`（`instId` 如 `BTC-USDT`）；启用时同样标「替代源」，首次启用前先实测一个 symbol 交叉核对。
 - 🚨 **候选 one_liner 里的涨跌幅必须经行情源核实后才可下传**——新闻 / KOL 转述的百分比一律视为二手（实测偏差可达一倍，且常把盘中峰值当收盘）。
@@ -92,7 +87,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
   - 🚫 **绝不传 `source_lang`**：TG item 的 `source_lang` 全是空串 `""`，传语言值会把数据全筛光、连续多天误报「源已降级」。
   - 判 TG 真挂：广拉返回里 `tg_kol_feeds` 条目为 0 才是真挂；有任一返回即源活着。
   - **产物只喂简报「资金流」区，不产候选、不做 consensus 聚合**。取两类：**大额转账**（金额 + 方向，挑 ≥$30M 或与当日候选实体相关的，佐证「解锁→交易所 = 实锤抛压」类叙事）、**清算簇**（按主流币聚合多空方向与量级，佐证多空强弱）。**剔** memecoin 喊单 / 赌球 / 与 firehose 重复的头条。
-  - **别再实现**：跨 category 的 `distinct_authors≥2` 分档、押注盘赔率入候选 —— TG feed 是 bot 不是 KOL，聚合前提不成立；且多 category 路由几乎不分流（10 次调用 ≈ 1 次信息量），所以只拉 1 次。链上突发（hack / depeg / 交易所异常）走 §8，不靠日常 TG 兜底。
+  - **只拉 1 次**：TG feed 是 bot 不是 KOL，`distinct_authors` 聚合前提不成立；多 category 路由几乎不分流（10 次 ≈ 1 次信息量）。链上突发走 §8，不靠日常 TG 兜底。
 - **CT firehose（浏览模式，仅首扫）**：**不传 `sources=["twitter"]`** → `news(asset_type="tradfi", query="<当日 3-5 个宽主题词空格拼，如 semiconductor memory oil Fed earnings>", time_range="1d", limit=20)`；Twitter 条目在 `social[]`（`articles[]` 多为 media）。代价：从「无差别浏览」变「主题引导」，主题词由当日 list/firehose 已知线索定，**主题外盲区如实认**。无完整 author/viewCount → 剔个人喊单 / 引流 / 闲聊 / 纯 TA，保留基本面异动 / 产业链 / 地缘 / 高密度框架。刷新模式不启用本层。
 - 媒体频道走 web news 不走 TG；同 username 去重 ≤3 条。
 
@@ -103,24 +98,17 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 | `LIST_IDS.tech` | 跨界传导源 | 首扫 + 刷新 ⚡P0 |
 | `LIST_IDS.master` | 投资大佬本人 / 追踪号 | 仅首扫（24h <3 条 → 追加取最新扩 top5+3 并标「⚠️大佬安静」）|
 
-P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1 次，真失败简报标 ❌ 且当次刷新强制补），**永远不允许"节流跳过"**——规则约束的是「不许偷偷少扫已配置的源」，不是「必须凑满三条」。
-- **配置了几条就查几条**：`LIST_IDS` 只填了 1 条 → P0 就是这 1 条；一条没填 → **整条 list 腿跳过**，简报的来源区标注「list 未配置」，自查 ②/⑪.a 记 `n/a` 而非 FAIL，**不阻塞下传 topic-engine**。
-- ⚠️ 但**已配置却扫失败**仍然是硬 FAIL——这是本条规则真正要防的：源配了却静默漏扫，简报看起来正常实则缺了一整个信息面。
+P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1 次，真失败简报标 ❌ 且当次刷新强制补）。配了几条查几条；**0 条配置 → 整条 list 腿跳过**，简报标「list 未配置」、自查 ②/⑪.a 记 `n/a`，**不阻塞下传**。
+- ⚠️ **已配置却扫失败 = 硬 FAIL**，这是本条规则真正要防的：源配了却静默漏扫，简报看起来正常实则缺了一整个信息面。（所以规则约束的是「不许偷偷少扫已配置的源」，不是「必须凑满三条」。）
 
-**🚨 端点铁律（误用不报错、只静默丢数据）**
-```
-必须 action="list_timeline"      🚫 绝不用 action="list_tweets"
-  list_timeline = 原创 + 引用推 + 纯RT ，静默剔除全部 replies   ← 我们要的
-  list_tweets   = 原创 + 引用推 + replies，静默剔除全部纯RT     ← 会毁掉采集
-误用后果：丢全部纯RT（占 33%，KOL 转发=背书=选题线索）+ 混入 ~60% reply 噪音
-         + 同 20 条覆盖时长缩水 28%，回看深度塌陷
-```
+**🚨 端点铁律**：必须 `action="list_timeline"`，**绝不用 `list_tweets`**。
+误用**不报错**，只静默丢 33% 纯 RT（KOL 转发 = 背书 = 选题线索）+ 混入 ~60% reply 噪音。
+对照表见 `references/agent-prompt-template.md` §端点铁律。
 **⚠️ 分页丢块（未解决）**：翻多页时**页内密集、页间凭空缺整段时间**，是 API 分页丢块不是 list 停更。→ **判 list 产能只用最新一页的连续头块，禁止用「全量条数 ÷ 全量跨度」算日均**（名义 1.32 条/天 vs 头块 6.7 条/天，差 5 倍）。
 
 ### 2.4 signal
-- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：走 query 串（`categories` 数组禁用）。返回可能超长 → 落盘文件再抽；剔掉税务代扣类条目再判信号；空信号标 `empty_no_signal`，不阻塞。
-  - ⚠️ **`signal` 的 query 串不做数据类型路由**（实测）：传 `query="congress senator stock purchase disclosure"`，`meta.filters_applied.keywords` 回 **null**，返回的是**默认全类 fanout**（insider_trading + institutional + kol_call + trader_position），而 `insider_trading` 里全是 `provenance:"corporate_insider"` 的 Form 4，**一条议员交易都没筛出来**。
-  - **想要议员交易只能客户端筛**：拿到 `insider_trading` 后按 `provenance` 字段自己分流，别指望用自然语言描述让服务端替你过滤。**query 写得再具体也不改变返回内容**——这是白花心思。
+- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：走 query 串。返回可能超长 → 落盘再抽；剔税务代扣类条目；空信号标 `empty_no_signal` 不阻塞。
+  🔴 **query 写得再具体也不改变返回内容**——`signal` 不做类型路由，想要议员交易只能拿到结果后按 `provenance` 客户端筛（见 §MCP 坑位）。
 - crypto `kol_call` / `trader_position`：**`ACCOUNT_ENGINES` 不含"喊单 / 实盘跟单"则默认关闭**（低差异化、长期 0 候选），突发模式用户明确要"看巨鲸/实盘"时例外；加密交易向账号可全开。
 
 ### 2.5 MCP 类型铁律
@@ -137,43 +125,16 @@ P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1
 2. **一 Agent 一调用链一 jq**：翻页**覆盖驱动**——翻到最老一条 `createdAt` 早于窗口起点，或达上限（主 3 页 / 科技 2 页 / 大师 1 页）；到上限仍不足必须注明「⚠️ 覆盖不足：仅回看 X.Xh」（诚实标注 > 假装覆盖）。刷新维持单页。prompt 必含「🚫 不要读 SKILL.md」。
 3. **首扫单批次全并发**：所有采集（主进程直调 + 全部 Agent）在**同一条 message** 发出，不分波；跨源综合（聚合 / 共振 / 跨界传导 / 纯交易预排除）等全返回后在主进程做。
 
-**Agent prompt 必备要素**（做成模板填占位符，禁每次手拼——手拼出过复用过期 scan_ts、时区规范缺失两类事故）：任务边界（调工具→jq→≤N 行精简文本）/ `THRESHOLD_MS` 显式传值 / **`action` 写死 `list_timeline`** / **`scan_ts_ms` 必须"刚刚取的"**（取 `NOW_MS` 后即刻派 Agent；禁止事后分析复用历史 scan_ts —— 复用 4.5h 前的值会让 age 变负、velocity 静默失真 3.4×）/ **createdAt 解析规范内联** / jq 变量只用 `as` / 返回格式逐字段给出 / 「只返回精简文本，不解释」。
+**Agent prompt**：用 `references/agent-prompt-template.md` **逐字复制、只替换占位符**。
+那份文件里是完整载荷（createdAt strptime 规范 / velocity 双轨公式 / RT 封顶 / age<0 报错口径 /
+噪音过滤 / 返回 schema / 回执路径）。🔴 **禁手拼**——手拼出过复用过期 scan_ts、时区规范缺失两类事故，
+两次都不报错，只是排序悄悄失效。
 
-**回执落盘（必做）**：list 走子进程，主 session 的调用审计看不到它 → 不落回执则自查永久 WARN，久了会训练操作者对 WARN 失敏。每个 list-Agent 算完 velocity 后用 Bash 落 `$STATE_DIR/trend-scout-list-receipt-<main|tech|master>-$DATE.json`：
-```json
-{"list":"main","list_id":"…","raw_count":<原始推文数>,"scan_ts_ms":<主进程传入的 NOW_MS>,
- "top_velocity":<最高velocity>,"handles":["<本list筛出的去重@用户名，不带@>"]}
-```
-回执是子进程亲手产出的真凭据（不真派 Agent 就没有），`scan_ts_ms` 绑定本次扫描杜绝复用旧回执；三栈齐 + `raw_count>0` + scan_ts 匹配 → 自查 ⑪.a 直接 PASS。`handles` 用于交叉验 `source_list` 真伪（⑪.a 一律 PASS 后 source_list 准确性会失去机检）。**`$DATE` 与 `scan_ts_ms` 都要显式传进 prompt。**
+**回执必落**：list 走子进程，主 session 的调用审计看不到它 → 不落回执则自查 ⑪.a 永久 WARN，
+久了会训练操作者对 WARN 失敏。路径与字段见模板文件 §回执。
 
-### createdAt 解析规范（内联进每个 list-Agent prompt）
-```
-返回格式：createdAt = "Fri Jul 17 06:30:30 +0000 2026" —— RFC-822 风格，非 ISO8601，
-自带显式 +0000 无歧义
-✅ 用 strptime "%a %b %d %H:%M:%S %z %Y" 直接解析为 UTC epoch
-🚫 禁止先转本地时区显示、再当 UTC 重新解析 —— 后果：近 8h 推文 age 全变负 → 被兜底压成
-   0.25 → velocity 退化成纯 engagement 排序，时间维度事实上失效（新推最多被放大 ~14×）
-```
-
-### velocity 双轨 jq（所有 list 统一）
-```
-velocity = (likeCount + 2*retweetCount + 0.5*replyCount) / max(age_hours, 0.25)
-RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 或 "RT@" 开头的纯转推 →
-  velocity_final = min(velocity, 本批次非RT贴最高velocity)
-  转发仍是背书信号（保留参与排序），但不许凭被转对象的爆款互动霸榜
-  （典型病例：自己原创互动个位数~几百，靠 RT 外部爆款借到 5 万赞 velocity）
-双轨 = velocity_final DESC top N + createdAt DESC top M → unique_by(.id) → createdAt DESC
-  首扫 主 17+3 / 科技 10+3 / 大师 4+1     刷新 主 7+3 / 科技 5+2
-<30min 推文无论 velocity 硬保留
-```
-**⚠️ age 为负 = 报错信号，禁止 `abs()` 静默转正**：abs 会掩盖两类真错误（scan_ts 已过期 / 时区解析写错）。算出 `age_hours < 0` 必须在返回里标 `⚠️ age 为负 (N 条)：scan_ts 过期或时区解析错 → 本次 velocity 不可信`，主进程据此判断重跑；仅 `0 ≤ age < 0.25` 才用 `max(age,0.25)` 防除零。**兜底函数会把 bug 变成静默失真——负 age 物理上不可能，它出现就说明前提坏了，该炸不该修。**
-
-### 噪音过滤（按内容判定，不维护点名黑名单）
-- **剔纯政治 / 社会 RT**（科技 AND 大师 list 的 prompt 都要加）：单条政治转推 velocity 可达数万，直接霸榜双轨首位、把真信号挤出榜。
-- **剔软性内容**：纯鸡汤 / 人生感悟 / 无市场信息的**原创**贴（"剔政治 RT"管不到非转推软贴）。
-- **噪音号三型**：持续霸榜型（高频政治、velocity 稳定占首位）/ burst 占位型（某时段刷屏）/ 单号吞噬型（一个号占单页 80%+ 且窗口内 0 条原创观点）。**判定看内容分类占比，不看当日条数**——burst 型占比取决于扫描时刻是否落在 burst 上（同号昨天 12/20、今天 5/20），单日样本不足以判定。
-- **⚠️ 收益边界**：Agent 端整号剔除**不会多拿一条有效数据**（每页条数固定，剔了不补别人），真收益只有「防双轨首位被零价值贴占据」；**源头把号移出 list 才是真解**（实测移出一个单号吞噬型后，该 list 信噪比 18%→54%、产能 4.5→6.7 条/天）。**MCP 无 list 写权限 → 必须人工在 Twitter UI 做，Skill 只能建议。**
-- 标 `is_kol_match`：username ∈ `KOL_WHITELIST`（仅统计，不参与排序 / 扣分）；每条候选落 `source_handle`（见 §5.3）。
+**噪音号**：能判什么、判不了什么、以及"真解是人工把号移出 list"，见模板文件 §噪音号。
+Skill 侧只做内容级过滤，**不维护点名黑名单**。
 
 对标差异化判定**不在本 skill 做**（topic-engine 层 B 专责）。
 
@@ -240,7 +201,6 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 - **`source_list` 按真实来源标，不准图省事全填 `external`**（复发坑）：在某条 list-Agent 输出里出现过 → 标该 list；只有真从 firehose / TG / metrics 来、未在任一 list 出现的才算 external。⚠️ **CT firehose 不是三个 list 之一 → 它来的候选一律 `external`**（曾把 7 条 CT 半导体料误标成 list 来源）。
 - **`source_handle`**（`source_list ∈ {main,tech,master}` 必填）：让它冒出来的 @用户名（不带 @，与回执 `handles` 同源）。自查 ⑪.d 交叉验：必须 ∈ 该 list 回执的 `handles`，否则 WARN。把 source_list 准确性从自律变机检。
 - 🚨 **只写持久目录，不要写 `/tmp`**：`$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`；刷新档 `YYYY-MM-DD-HHMM.json` 同目录；索引 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD-latest.txt` 内容为当次 json 的绝对路径。**下游（topic-engine / twitter-ops lint）一律从这里读，全仓不存在第二个候选池位置。**
-  单写 `/tmp` 的后果：机器重启即清空，回填静默退化成全 null（不报错）、topic-engine 出选题直接扑空、打分-效果回验的 join 源消失。**修 `/tmp` 易失性问题时，要把同目录所有跨天资产一起清点，而不是只搬报错的那个。**
 
 **5.4 标签体系**（写 `tags` 数组，不加 schema 字段）：`⚡加速`(年轻+快速积累) / `🔗聚合事件`(同实体 ≥2 条合并，engagement 累加) / `📅pre-event`(macro 且 12h 内高影响日历，timeliness +1) / `📈升温`(同 entity velocity >3× 上轮) / `🔥潜热`(首发+共振+高 reply 等 ≥2 信号) / `🌉跨界传导`(如 半导体↔矿企 / 黄金↔BTC / VIX↔加密 / 利率↔风险资产) / `🌊narrative` / `🆕周新增` / `BREAKING` / `✅多源确认` / `⚠️单源待验证`。
 
@@ -259,24 +219,10 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 - 叙事热度榜 **`BOARDS` 全列**（0 hit 也标），刷新窗口内任一板块 ≥2 新候选必须重算叙事榜。
   必关注 Top5 每条 1 行摘要（数据在表 / candidates，不重复展开）。
 
-  **🌊 板块热度分口径（0–5 分，钉死）**——下游 topic-engine #12（≥3.0 触发）
-  和 deathnote（连续 4 周 <2.0）用的就是这个分，**没有这套口径它们的阈值就是空的**：
+  **🌊 板块热度分口径**见 `references/source-list.md` §板块热度分（0–5 分四项判据）。
+  两条约束留在这里，因为它们最容易被忽略：**0 hit 板块记 0.0 不是 n/a**（deathnote 要的就是连续低分）；
+  四项必须来自**本次扫描**，但周级消费者（deathnote）用 `score_week_max` 而非最后一次的分。
 
-  | 项 | 分值 | 判据（全部可从本次扫描数据直接数出来） |
-  |---|---:|---|
-  | 候选数 | 0–2 | 本板块本次候选 0 条 = 0；1–2 条 = 1；≥3 条 = 2 |
-  | KOL 广度 | 0–1.5 | 提到该板块的**不同** KOL 账号数：≤1 = 0；2 = 0.75；≥3 = 1.5 |
-  | 跨语言 | 0–1 | 只有单一语种 = 0；中英（或任意 ≥2 语种）都有 = 1 |
-  | 硬数据支撑 | 0–0.5 | 该板块至少 1 条候选带 metrics 实时数字 = 0.5 |
-
-  合计封顶 5.0，保留 1 位小数。**0 hit 板块记 0.0，不是 n/a**——deathnote 要的就是连续低分。
-  ⚠️ 这四项都必须来自**本次扫描**，不许继承上一轮的分（板块热度是时点量）。
-
-  🔴 **但「周」级消费者要用当周最高分，不是最后一次的分。** 分是时点量，而 deathnote 判的是
-  「连续 4 周 <2.0」——一周内首扫 + 多次刷新会算出好几个分，刷新档的候选 floor 是全板块合计 ≥7，
-  单板块几乎不可能再 ≥3 条，于是**早上 3.5 分的热板块会被晚上刷新重算成 0.5**。
-  规则：`narrative-watchlist-$WEEK.json` 里每个板块记 `score_latest` 和 `score_week_max` 两个值，
-  **deathnote 只看 `score_week_max`**；topic-engine #12 的 ≥3.0 触发看 `score_latest`（它要的是当下热度）。
 - **价格铁律**：当前价只引 metrics 返回值，新闻里的价格是"历史叙述"；实时数据区与叙事区数字不混用。
 - **数据源诚实**：自查 WARN ≥1 → 简报顶部必有 `> 🟡 数据源审计告警` 块显式列降级项；汇报说「N PASS / M WARN / K FAIL」，**禁称"全 PASS"**；某源连续 2 次 degraded → section 顶部显式标注。
 - **宏观事件时间**：写"今晚 / 明晚"前用绝对日历核对（CPI = 每月第二个周三 8:30 ET；非农 = 第一个周五；GDP advance = 季末月最后一周周三 / 四），标 ET + 本地双时间。

@@ -151,3 +151,55 @@ GET https://api.dune.com/api/v1/query/{query_id}/results
 - [ ] 一手源还是二手源？
 - [ ] 数据可验证吗？
 - [ ] 是否有对立观点？
+
+
+---
+
+# MCP 坑位（实测档案）
+
+> 这些是端点的实际行为记录，不是调用白名单。SKILL.md 只留结论，细节在这里。
+
+## 国债 / 宏观 query 的误抽与重复行
+
+- ⚠️ **该 query 会触发误抽 + 重复行**（实测）：`curve` 被当成 **Curve 代币 `CRV`**，`keywords` 解析成 `["US","YIELD","CRV"]`，meta 还会报 `asset_type=tradfi 但所有 keyword 落到 crypto 家族`。
+- **后果是返回 3 行内容完全相同的曲线**（每个 keyword 各一行，靠 `_resolved_from_keyword` 区分）。数据本身是对的，但**读之前必须按 `_resolved_from_keyword` 去重**，否则会把同一条曲线当成三个独立数据点。那条 crypto 警告是误报，不用理会。
+- 想避开误抽可改用不含歧义词的写法（如 `query="treasury rates"`），但**去重这一步照做**——多 keyword 解析出来就会多行。
+
+## 商品符号
+
+- ⚠️ **商品符号实测（黄金/原油拿不到一手价）**：`CLUSD` 返 0 结果 · `BZUSD` 在 query 串里**静默丢弃** · `GCUSD` 单调亦返 0 · `OIL`/`GOLD` 别名会解析成 **iPath 原油 ETN / Gold.com 股票**（不是商品）。
+  **可用替代**：原油走 `USO`（WTI 近月期货 ETF，**代理指标非现货**，引用须标口径）；黄金优先试 `query="gold price"` 拿 `GCUSD` 行（会同时命中 Gold.com 股票，按 symbol 筛）。
+  🔒 **拿不到就按「价格数据铁律」处理**：简报标「未取到一手价」，**禁止引用新闻里的涨跌幅当数据**。
+
+## 异动榜
+
+- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，**不传 `min_market_cap`**（间歇被 schema 拒 `-32602`）；⚠️ **返回行不含 `marketCap`**（实测：只有 symbol/name/price/change/changesPercentage），**必须二次批量快照补市值**后再按 ≥$1B 过滤，否则杠杆 ETF（BITO/SOXL/TSLL/NVD 等）会混进候选。另需按 name 剔 ETF/杠杆产品——正则 `ETF|ETN|UltraPro|Ultra|Leveraged|\dX|Bull|Bear|Daily`，⚠️ 只判 "ETF" 单词会漏（`ProShares UltraPro QQQ` 不含该字串）。`biggest gainers/losers` 端点全是仙股与数据错误，**禁用**。
+
+## signal 的 query 不做类型路由
+
+- ⚠️ **`signal` 的 query 串不做数据类型路由**（实测）：传 `query="congress senator stock purchase disclosure"`，`meta.filters_applied.keywords` 回 **null**，返回的是**默认全类 fanout**（insider_trading + institutional + kol_call + trader_position），而 `insider_trading` 里全是 `provenance:"corporate_insider"` 的 Form 4，**一条议员交易都没筛出来**。
+- **想要议员交易只能客户端筛**：拿到 `insider_trading` 后按 `provenance` 字段自己分流，别指望用自然语言描述让服务端替你过滤。**query 写得再具体也不改变返回内容**——这是白花心思。
+
+
+---
+
+# 板块热度分（0–5 分）
+
+下游 topic-engine #12（≥3.0 触发）
+和 deathnote（连续 4 周 <2.0）用的就是这个分，**没有这套口径它们的阈值就是空的**：
+
+| 项 | 分值 | 判据（全部可从本次扫描数据直接数出来） |
+|---|---:|---|
+| 候选数 | 0–2 | 本板块本次候选 0 条 = 0；1–2 条 = 1；≥3 条 = 2 |
+| KOL 广度 | 0–1.5 | 提到该板块的**不同** KOL 账号数：≤1 = 0；2 = 0.75；≥3 = 1.5 |
+| 跨语言 | 0–1 | 只有单一语种 = 0；中英（或任意 ≥2 语种）都有 = 1 |
+| 硬数据支撑 | 0–0.5 | 该板块至少 1 条候选带 metrics 实时数字 = 0.5 |
+
+合计封顶 5.0，保留 1 位小数。**0 hit 板块记 0.0，不是 n/a**——deathnote 要的就是连续低分。
+⚠️ 这四项都必须来自**本次扫描**，不许继承上一轮的分（板块热度是时点量）。
+
+🔴 **但「周」级消费者要用当周最高分，不是最后一次的分。** 分是时点量，而 deathnote 判的是
+「连续 4 周 <2.0」——一周内首扫 + 多次刷新会算出好几个分，刷新档的候选 floor 是全板块合计 ≥7，
+单板块几乎不可能再 ≥3 条，于是**早上 3.5 分的热板块会被晚上刷新重算成 0.5**。
+规则：`narrative-watchlist-$WEEK.json` 里每个板块记 `score_latest` 和 `score_week_max` 两个值，
+**deathnote 只看 `score_week_max`**；topic-engine #12 的 ≥3.0 触发看 `score_latest`（它要的是当下热度）。
