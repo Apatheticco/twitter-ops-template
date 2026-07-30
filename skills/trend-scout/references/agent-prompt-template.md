@@ -26,7 +26,7 @@
 
 ```
 任务边界：调 twitter(action="list_timeline", list_id=<LIST_ID>) → jq 汇总 → 只返回 ≤N 行精简文本，不解释。
-action 写死 list_timeline —— 不要用 list_tweets（见下方端点铁律）。
+action 写死 list_timeline（本次只拉这一个端点；它与 list_tweets 各缺一半，合并策略是主进程的事，见下方端点铁律）。
 scan_ts_ms = <NOW_MS>（主进程刚取的，禁止自己取或复用历史值）
 DATE = <DATE>    THRESHOLD_MS = <THRESHOLD_MS>
 
@@ -73,15 +73,30 @@ jq 变量只用 as，不用 $ENV。
 
 ---
 
-## 端点铁律：`list_timeline` ≠ `list_tweets`
+## 端点铁律：`list_timeline` 与 `list_tweets` 都不完整
 
-| | `list_timeline` ✅ | `list_tweets` ❌ |
+| | `list_timeline`（主用） | `list_tweets`（补拉） |
 |---|---|---|
-| 返回 | 该 list 成员的原创 + 转推 + reply，含完整 `createdAt` / 互动数 | 混入大量 reply、且**静默丢掉纯 RT** |
-| 误用的后果 | — | **不报错**，静默丢 33% 纯 RT + 混入 60% reply |
+| 大致倾向 | 收纯 RT，弃 reply | 收 reply，弃纯 RT |
+| 稳定吗 | **不稳定**——对照组 list 用 `list_timeline` 也返回了 `isReply: true` 的条目 |
+| 实测缺口 | 重叠窗口内**丢了一条正常原创长推**（既非 reply 也非 RT），还漏掉一个 40.6k 粉的成员 |
 
-**这是本仓最贵的一个坑**：两个 action 名字相近、都返回数据、都不报错，
-但用错的那个会让双轨排序建在一个残缺样本上，而简报看起来完全正常。
+**日常首扫用 `list_timeline` 就够。** 但两点要记住：
+
+1. **`list_tweets` 不是"错的那个"**，它是"另一半"。某个 list 产出明显偏低、
+   或要复核"某人今天真的没发推"时，补拉一次并**按 `id` 合并去重**。
+2. 名字相近、都返回数据、都不报错——**用哪个都不会有报错提示你样本残缺**，
+   而双轨排序会建在残缺样本上，简报看起来完全正常。这是本仓最贵的坑之一。
+
+⚠️ **`list_timeline` 返回里没有 `inReplyToUserId`**，判 reply 用 `isReply` / `inReplyToId`。
+（`user_tweets` 端点**有** `inReplyToUserId` / `inReplyToUsername`——同一个 MCP 工具、
+不同 action 字段集不同。**别把一处的字段观察套到另一处。**）
+
+⚠️ **`quoted_tweet` 三层嵌套，第三层是空壳**（只有 id，`author: {}` / `text: ""`）。
+同一条推会在同一页里既作为顶层 item、又作为别人的 `quoted_tweet` 出现 → **必须按 `id` 去重**。
+
+⚠️ **`entities.symbols` 不可靠**：实测一条正文提了近 10 个代币，`symbols` 只列出 1 个。
+别拿它当提取标的的唯一来源。
 
 ---
 
