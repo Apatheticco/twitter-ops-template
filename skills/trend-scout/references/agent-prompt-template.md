@@ -30,12 +30,16 @@ action 写死 list_timeline（本次只拉这一个端点；它与 list_tweets �
 scan_ts_ms = <NOW_MS>（主进程刚取的，禁止自己取或复用历史值）
 DATE = <DATE>    THRESHOLD_MS = <THRESHOLD_MS>
 
-── createdAt 解析规范 ──
-返回格式：createdAt = "Fri Jul 17 06:30:30 +0000 2026" —— RFC-822 风格，非 ISO8601，
-自带显式 +0000 无歧义。
-✅ 用 strptime "%a %b %d %H:%M:%S %z %Y" 直接解析为 UTC epoch
-🚫 禁止先转本地时区显示、再当 UTC 重新解析 —— 后果：近 8h 推文 age 全变负 → 被兜底压成
-   0.25 → velocity 退化成纯 engagement 排序，时间维度事实上失效（新推最多被放大 ~14×）
+── createdAt 解析规范（🔴 实测过，别改写）──
+返回格式：createdAt = "Fri Jul 17 06:30:30 +0000 2026" —— RFC-822 风格，非 ISO8601，offset 恒为 +0000。
+✅ jq 正确写法（**去掉 %z**，让 mktime 按 UTC 处理——offset 恒 +0000 无需解析）：
+   .createdAt | sub(" \\+0000 ";" ") | strptime("%a %b %d %H:%M:%S %Y") | mktime
+🚫 **绝对禁止 `strptime("... %z ...")|mktime`**：jq 的 `%z`+`mktime` 会掺入运行机器的本地时区——
+   实测 UTC 下正确、**+8 时区偏 +28800s、-5 时区偏 -14400s**。
+   这个偏移**不会让 age 变负**（8h 偏移 < 大多数推文 age），所以「age 为负」那道守卫**抓不到它**，
+   velocity 排序会静默失真而全程无告警。这是最隐蔽的一类，务必用上面去 %z 的写法。
+   （备用等价写法：正则重组成 ISO `\(.y)-\(.mon)-\(.d)T\(.t)Z` 再 `fromdateiso8601`，同样 TZ 无关。）
+🚫 也禁止先转本地时区显示、再当 UTC 重新解析。
 
 ── velocity 双轨 ──
 velocity = (likeCount + 2*retweetCount + 0.5*replyCount) / max(age_hours, 0.25)
