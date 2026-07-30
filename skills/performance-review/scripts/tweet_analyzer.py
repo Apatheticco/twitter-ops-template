@@ -4,9 +4,10 @@
 用于批量处理推文数据，筛选高表现推文，计算互动率。
 
 支持的输入格式：
-1. Twitter API v2 JSON 导出
-2. Twitter 官方数据归档 (tweets.js)
-3. CSV 格式 (手动整理)
+1. api    —— Twitter API v2 JSON 导出（public_metrics.snake_case）**或** Followin MCP
+             user_tweets 导出（顶层 camelCase viewCount/likeCount + results 外层）——两种都认
+2. archive —— Twitter 官方数据归档 (tweets.js)，无 views → 退化为绝对互动数
+3. csv    —— 手动整理
 
 用法：
     python tweet_analyzer.py --input tweets.json --format api
@@ -22,25 +23,54 @@ from datetime import datetime
 from pathlib import Path
 
 
+def _pick(item, metrics, *names):
+    """两种命名都认，防静默降级。
+
+    Twitter API v2 导出：public_metrics.{like_count,impression_count,...}（snake_case，嵌套）。
+    Followin MCP / twitterapi.io：{likeCount,viewCount,...}（camelCase，顶层）。
+    只认一种的话，喂另一种数据 → 全读成 0 → viewCount 明明在却静默降级成绝对互动数排序
+    （SKILL 推荐用本脚本"首次建库"，而建库数据大概率来自 MCP，正好踩这个坑）。
+    """
+    for n in names:
+        v = metrics.get(n)
+        if v is None:
+            v = item.get(n)
+        if v is not None:
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                pass
+    return 0
+
+
 def load_api_json(filepath):
-    """加载 Twitter API v2 格式的 JSON"""
+    """加载推文 JSON —— 兼容 Twitter API v2 与 Followin MCP 两种字段命名"""
     with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     tweets = []
-    items = data.get('data', data) if isinstance(data, dict) else data
+    # Followin MCP 外层是 results[0].data.tweets[]；Twitter API v2 是 data[]
+    if isinstance(data, dict):
+        r = data.get('results')
+        if isinstance(r, list) and r and isinstance(r[0], dict):
+            items = r[0].get('data', {}).get('tweets', [])
+        else:
+            items = data.get('data', data)
+    else:
+        items = data
 
     for item in items:
         metrics = item.get('public_metrics', {})
         tweets.append({
             'id': item.get('id', ''),
             'text': item.get('text', ''),
-            'created_at': item.get('created_at', ''),
-            'likes': metrics.get('like_count', 0),
-            'retweets': metrics.get('retweet_count', 0),
-            'replies': metrics.get('reply_count', 0),
-            'quotes': metrics.get('quote_count', 0),
-            'impressions': metrics.get('impression_count', 0),  # 默认 0 —— 默认 1 会算出 16200% 并标成互动率
+            'created_at': item.get('created_at') or item.get('createdAt', ''),
+            'likes': _pick(item, metrics, 'like_count', 'likeCount'),
+            'retweets': _pick(item, metrics, 'retweet_count', 'retweetCount'),
+            'replies': _pick(item, metrics, 'reply_count', 'replyCount'),
+            'quotes': _pick(item, metrics, 'quote_count', 'quoteCount'),
+            # impressions 默认 0（默认 1 会算出 16200% 并标成互动率）；MCP 叫 viewCount
+            'impressions': _pick(item, metrics, 'impression_count', 'viewCount'),
             'retweeted_tweet': item.get('retweeted_tweet'),  # 非空 = 转推（结构判据，比 text 前缀稳）
         })
     return tweets

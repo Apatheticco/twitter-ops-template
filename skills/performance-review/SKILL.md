@@ -170,7 +170,7 @@ ER 保守   = (L+RT)          / V   ← 下限，全剔 replies
   **每月重算一次排名**（🔴 **只重写 patterns.md §三那一张表，其余小节原样保留**——
   按字面理解成"整份重新生成"会抹掉 §六 复用追踪的历史；计数前同样先按 `tweet_id` 去重）；**复用后表现不及原条目 2 次以上就降级**——没有复用追踪，"成功模式"只是事后叙事。
 - **日常调用**：写推文前找灵感（按话题搜历史条目 → 3 个方向 + 参考）／验证某个角度过去的表现／取 ER 最高的 5 个开头句式。
-- **批量处理**：`scripts/tweet_analyzer.py` 离线跑 —— 输入支持 Twitter API v2 JSON / 官方归档 `tweets.js` / CSV，自动算 ER、按 Top10%/25% 打 S/A 级、输出 Markdown 报告 + 入库 JSON：`python scripts/tweet_analyzer.py -i tweets.json -f api -o report.md`。首次建库或样本量大时用；日常几十条直接用 MCP 拉。
+- **批量处理**：`scripts/tweet_analyzer.py` 离线跑 —— `api` 格式**同时认 Twitter API v2 与 Followin MCP 两种字段命名**（MCP 的 `viewCount`/`likeCount` camelCase 也读，不会因字段名不匹配静默降级成绝对互动数）；另支持官方归档 `tweets.js` / CSV，自动算 ER、按 Top10%/25% 打 S/A 级、输出 Markdown 报告 + 入库 JSON：`python scripts/tweet_analyzer.py -i tweets.json -f api -o report.md`。首次建库或样本量大时用；日常几十条直接用 MCP 拉。
 
 ---
 
