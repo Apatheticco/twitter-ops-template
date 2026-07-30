@@ -38,7 +38,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 ```
 
 🔴 **禁止凭模型自己的日期认知推算日期或周数。** 模型的日期偏差常达数月，
-而这两个值被当**文件名**用——猜错就写进错误日期的文件，于是「今日简报是否已存在」查重扑空、
+而这几个值被当**文件名**用——猜错就写进错误日期的文件，于是「今日简报是否已存在」查重扑空、
 下游读不到今日产物、回填链断，**而全程不报错、产物格式齐全**。
 凡是要写「今晚 / 明天 / 本周」这类相对时间，也一律以 `$DATE` 为基准换算，不凭印象。
 
@@ -52,7 +52,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 |---|---|---|---|
 | "首扫" / 当日首次 | 🟢 首扫 | 24h | 全量简报 + candidates ≥12 |
 | "刷新" / 距首扫 ≥2h | 🔵 刷新 | 上次扫描→now | 增量补丁 + 真新增 candidates ≥7 |
-| "突发" / 单一大事件 | 🔴 突发 | <6h | 单事件深挖 + candidates ≥3（共享 event_id），SLA 5min |
+| "突发" / 单一大事件 | 🔴 突发 | <6h | 单事件深挖 + candidates ≥3（**每条候选各写自己的 `event_id`**，见 §8；共享指针文件只表示「当前最新事件」），SLA 5min |
 | "30秒扫一下" | 🟡 极速 | 当下 | 价格 + Top1（**不出 candidates、不接 topic-engine**）|
 
 当日首次必须首扫（无 baseline 不准跑刷新）；距上次扫描 <30min 拒绝刷新。
@@ -235,7 +235,7 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 - **单源 BREAKING**（地缘 / 政治 / 军事 / 监管）：≥2 个相互独立信源确认才可 timeliness ≥4，否则强制 cap 3 + 标 `⚠️单源待验证`。浏览模式 firehose 来的 BREAKING 一律先按单源。
 
 ### 5.3 candidates schema
-必填：`id` / `title`(≤30字) / `one_liner`(**≤110字**含核心数字；**预算优先级：核心数字 > 事件 > 交叉信号**，放不下就砍交叉信号别砍数字) / `category`(crypto|tech|investing|macro) / `source_type` / `source_list`(main|tech|master|external) / `is_kol_target` / `first_seen_ts_ms` / `raw_signals`(engagement_twitter + engagement_other + diffusion_minutes + cross_source_count) / `scores` / `tags` / `schema_version`。无 `notes` 字段——交叉信号 / 风险写进 `one_liner`。
+必填：`id` / `title`(≤30字) / `one_liner`(**≤110字**含核心数字；**预算优先级：核心数字 > 事件 > 交叉信号**，放不下就砍交叉信号别砍数字) / `category`(crypto|tech|investing|macro) / `source_type` / `source_list`(main|tech|master|external) / `is_kol_target` / `first_seen_ts_ms` / **`scan_ts_ms`（= 本次 `NOW_MS`，写在 json 顶层，不是每条候选各写一份）** / `event_id`（突发模式下必填，见 §8；非突发填 `null`）/ `raw_signals`(engagement_twitter + engagement_other + diffusion_minutes + cross_source_count) / `scores` / `tags` / `schema_version`。无 `notes` 字段——交叉信号 / 风险写进 `one_liner`。
 - **`exclusive_details` 只给 BREAKING 候选**：≥2 条且分属不同类型（时间线拼图 / 量级换算 / 细节放大 / 时间巧合 / 跨语言共识），同主题撞车升 ≥3。非 BREAKING 禁加。
 - **`source_list` 按真实来源标，不准图省事全填 `external`**（复发坑）：在某条 list-Agent 输出里出现过 → 标该 list；只有真从 firehose / TG / metrics 来、未在任一 list 出现的才算 external。⚠️ **CT firehose 不是三个 list 之一 → 它来的候选一律 `external`**（曾把 7 条 CT 半导体料误标成 list 来源）。
 - **`source_handle`**（`source_list ∈ {main,tech,master}` 必填）：让它冒出来的 @用户名（不带 @，与回执 `handles` 同源）。自查 ⑪.d 交叉验：必须 ∈ 该 list 回执的 `handles`，否则 WARN。把 source_list 准确性从自律变机检。
@@ -249,7 +249,25 @@ raw_score = heat×0.50 + timeliness×0.40 + diffusion×0.10
 ## 6. 简报与输出
 
 - **单日单文档** `$BRIEF_DIR/YYYY-MM-DD 每日热点简报.md`：首扫新建，刷新 append `## 🔵 刷新 · HH:MM` + frontmatter 累加 `modes` / `刷新_times` / `last_updated`。
-- **9 个 section 全出**；叙事热度榜 **`BOARDS` 全列**（0 hit 也标），类别 floor 自定；刷新窗口内任一板块 ≥2 新候选必须重算叙事榜。必关注 Top5 每条 1 行摘要（数据在表 / candidates，不重复展开）。
+- **9 个 section 全出**（逐个点名，缺一即自查⑦ FAIL）：
+  ① 📊 实时数据区 ② 📰 叙事摘要区 ③ 🌊 叙事热度榜 ④ 🔥 必关注 Top5
+  ⑤ 🗣 KOL / 社媒 ⑥ 📅 事件锚点 ⑦ 🟡 数据源审计 ⑧ 📋 候选池排序表 ⑨ ➡️ 接驳提示
+  —— 写「9 个 section 齐」但不枚举，这条机检就只能靠猜。
+- 叙事热度榜 **`BOARDS` 全列**（0 hit 也标），刷新窗口内任一板块 ≥2 新候选必须重算叙事榜。
+  必关注 Top5 每条 1 行摘要（数据在表 / candidates，不重复展开）。
+
+  **🌊 板块热度分口径（0–5 分，钉死）**——下游 topic-engine #12（≥3.0 触发）
+  和 deathnote（连续 4 周 <2.0）用的就是这个分，**没有这套口径它们的阈值就是空的**：
+
+  | 项 | 分值 | 判据（全部可从本次扫描数据直接数出来） |
+  |---|---:|---|
+  | 候选数 | 0–2 | 本板块本次候选 0 条 = 0；1–2 条 = 1；≥3 条 = 2 |
+  | KOL 广度 | 0–1.5 | 提到该板块的**不同** KOL 账号数：≤1 = 0；2 = 0.75；≥3 = 1.5 |
+  | 跨语言 | 0–1 | 只有单一语种 = 0；中英（或任意 ≥2 语种）都有 = 1 |
+  | 硬数据支撑 | 0–0.5 | 该板块至少 1 条候选带 metrics 实时数字 = 0.5 |
+
+  合计封顶 5.0，保留 1 位小数。**0 hit 板块记 0.0，不是 n/a**——deathnote 要的就是连续低分。
+  ⚠️ 这四项都必须来自**本次扫描**，不许继承上一轮的分（板块热度是时点量）。
 - **价格铁律**：当前价只引 metrics 返回值，新闻里的价格是"历史叙述"；实时数据区与叙事区数字不混用。
 - **数据源诚实**：自查 WARN ≥1 → 简报顶部必有 `> 🟡 数据源审计告警` 块显式列降级项；汇报说「N PASS / M WARN / K FAIL」，**禁称"全 PASS"**；某源连续 2 次 degraded → section 顶部显式标注。
 - **宏观事件时间**：写"今晚 / 明晚"前用绝对日历核对（CPI = 每月第二个周三 8:30 ET；非农 = 第一个周五；GDP advance = 季末月最后一周周三 / 四），标 ET + 本地双时间。

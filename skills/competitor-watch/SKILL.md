@@ -34,13 +34,13 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
 **③ 时钟（🔴 每轮开工第一件事）**：用 shell 现取一次，**全程只用这一组值**：
 
 ```bash
-TODAY=$(date +%F)          # 2026-07-30
+DATE=$(date +%F)          # 2026-07-30
 WEEK=$(date +%G-W%V)       # 2026-W31 —— ISO 周，跨年不漂
 NOW_MS=$(( $(date +%s) * 1000 ))
 ```
 
 🔴 **禁止凭模型自己的日期认知推算 `$DATE` / `$WEEK` / `now`。** 模型的日期偏差常达数月，
-而这两个变量被当**文件名**用——猜错就写进错误日期的文件，下一轮查重扑空、读不到今日产物、
+而这几个变量被当**文件名**用——猜错就写进错误日期的文件，下一轮查重扑空、读不到今日产物、
 回填链断，而**全程不报错，产物格式齐全**。这类静默错误比崩溃难查得多。
 
 **④ 🔑 名单类文件「存在但仍是占位符」= 视同没有**：
@@ -99,7 +99,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
       "role": "BENCHMARK | BASELINE",
       "followers": 0,
       "this_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0, "retweets_dropped": 0},
-      "prev_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0,
+      "prev_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0, "retweets_dropped": 0,
                     "source": "rescanned | inherited",
                     "source_scanned_at": "ISO8601"},
       "wow_median_pct": 0, "wow_count_pct": 0,
@@ -125,6 +125,22 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 > 继承到的是"3 天前的本周"，Δ% 全废。所以 `prev_week` 必须标 `source`：
 > `rescanned` = 本次真的重扫了上周窗口（推荐）；`inherited` = 从旧文件继承，
 > 必须同时写 `source_scanned_at`，且报告里要显式披露实际间隔天数。
+
+### 落盘前自查（任一 FAIL 就返工，不许"数字齐了就算跑完"）
+
+```
+① 文件名 = competitor-watch-$WEEK.json，$WEEK 由 date +%G-W%V 现取
+② scanned_at 已写，且是本次真实时间
+③ 每个账号 this_week.retweets_dropped 是实数（写 0 = 声明确实一条转推都没有）
+④ prev_week.source 已标 rescanned / inherited；标 inherited 的必须同时有 source_scanned_at
+⑤ 读到旧文件时已核 scanned_at 距今 ≤8 天，超期已重扫
+⑥ 占位符账号（@[账号1] 这类）记「未配置」而非「停更」
+⑦ 死号/取不到数据的账号已显式标注，无编造数字
+⑧ 对标表同时有「发文量 Δ%」和「中位 Δ%」两列
+```
+
+**这份清单是本 Skill 唯一的机检。** 上面那些 🔴 规则如果没有它，就只能靠每次自觉——
+而全仓已经出过一次「规则写了、下游没接、报告照样通过」的事故。
 
 ## 3. 分析
 

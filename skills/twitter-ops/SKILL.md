@@ -13,7 +13,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ### 🚧 第一步永远是：检查初始化状态
 
-#### 判定原则（先读这三条，再看表）
+#### 判定原则（先读完这几条，再看表）
 
 **① 只检"必填项"，不检整份文件。**
 配置文件是**分阶段填**的——`config.md` 明写「先只填 🔴 三项」、`operations-plan.md` 明写「第一次只填 §二 §七」。
@@ -55,7 +55,9 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 > **范围外一律只 warn 不拦**：config.md 🟡 区、operations-plan §一/§三/§四/§五、voice-guide 其余节。
 > 它们缺失会降低产出质量，输出时如实标注即可——**别把"能跑得更好"写成"不许跑"**。
 
-**⑤ 🕐 时钟：配置闸过了之后的第一个动作，是取一次当前时间并向下游传。**
+### 🕐 配置闸过了之后的第一个动作：取一次当前时间，向下游传
+
+（这不是一条"判定原则"——上面 ①-④ 讲的是"怎么判断配置有没有填"，这一节讲的是"开跑第一步做什么"。）
 
 ```bash
 DATE=$(date +%F)           # 2026-07-30
@@ -64,7 +66,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 ```
 
 🔴 **禁止凭模型自己的日期认知推算日期或周数**，也禁止让每个下游 Skill 各自猜——
-调度器取一次，整轮所有 Skill 用同一组值。这两个值被当**文件名**用：猜错 → 写进错误日期的文件 →
+调度器取一次，整轮所有 Skill 用同一组值。这几个值被当**文件名**用：猜错 → 写进错误日期的文件 →
 下一轮查重扑空、读不到今日产物、回填链断，而**全程不报错、产物格式齐全**。
 各 Skill 自己的 §0 也各有一条同样的时钟条款（它们可以被直接触发、不经本调度器），
 两处规则必须一致：**周编号只认 `%G-W%V`**。
@@ -145,7 +147,7 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 
 **trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `$STATE_DIR/trend-scout-candidates/$DATE.json`（刷新档 `-HHMM`）**且索引 `$DATE-latest.txt` 已写、内容指向的 json 真实存在** —— 只验 json 不验索引，会出现「lint PASS 但 topic-engine 的强制读当场扑空」③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
 
-**topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（**两轴都标**：轴 A 形态 + 轴 B 角色，见 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度
+**topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（**两轴都标**：轴 A 形态 + 轴 B 角色，见 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度 —— **数据源 = `twitter(action="user_tweets")` 现拉自家近 7 天原创推**（剔 reply 与 `RT @`），不依赖任何本模板不产出的历史清单文件；拉不到就记 WARN「查重未执行」，**不许当 PASS 划过去**
 
 **tweet-composer**：① 7 项入参齐 ② 字符预算（单推 ≤280 加权；Thread 逐条核）③ 反向风险在**正文**里而不只在 metadata ④ 配图方案 + 首评草稿齐（完整 15 项见 tweet-composer §9）
 

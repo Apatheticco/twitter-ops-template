@@ -80,7 +80,9 @@ trend-scout 会如实标注哪几路因为缺配置跳过了，你据此再补�
 
 > **「检查 config.md 填全了吗」**
 
-它会核对四件事：🔴 三项是否都有值 · `MAIN_ENGINE_TYPES` 是否和 operations-plan §三 对得上 ·
-`STATE_DIR`/`WORK_DIR`/`BRIEF_DIR` 是否都不是 `/tmp` ·
-以及**日期是不是用 shell 现取的**（各 Skill §0 的时钟条款：`date +%F` / `date +%G-W%V`，
-不许凭模型的日期认知推算——那两个值是文件名，猜错了不报错，只是下一轮读不到东西）。
+它会核对三件事：🔴 三项是否都有值 · `MAIN_ENGINE_TYPES` 是否和 operations-plan §三 对得上 ·
+`STATE_DIR`/`WORK_DIR`/`BRIEF_DIR` 是否都不是 `/tmp`。
+
+> ⚠️ **还有一条查不了**：各 Skill §0 要求日期用 shell 现取（`date +%F` / `date +%G-W%V`），
+> 而这是**运行时行为**，看 config.md 看不出来。想验它就跑一轮，
+> 看落盘文件名里的日期和周数对不对得上今天。

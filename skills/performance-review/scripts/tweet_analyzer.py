@@ -40,7 +40,7 @@ def load_api_json(filepath):
             'retweets': metrics.get('retweet_count', 0),
             'replies': metrics.get('reply_count', 0),
             'quotes': metrics.get('quote_count', 0),
-            'impressions': metrics.get('impression_count', 1),
+            'impressions': metrics.get('impression_count', 0),  # 默认 0 —— 默认 1 会算出 16200% 并标成互动率
         })
     return tweets
 
@@ -97,7 +97,12 @@ def drop_retweets(tweets):
     转推的互动数是别人的，混进来会霸占 S 级榜首，进而被写进素材库当成
     "你自己的可复用爆款句式"，再喂给写作环节。
     """
-    kept = [t for t in tweets if not t.get('text', '').lstrip().startswith('RT @')]
+    def is_rt(text):
+        s = text.lstrip()
+        # 'RT @user:' 是标准形态；'RT@user:' 少数客户端会产出，同样是转推
+        return s.startswith('RT @') or s.startswith('RT@')
+
+    kept = [t for t in tweets if not is_rt(t.get('text', ''))]
     return kept, len(tweets) - len(kept)
 
 
@@ -122,6 +127,14 @@ def analyze_tweets(tweets):
     for tweet in tweets:
         tweet['engagement_total'] = tweet['likes'] + tweet['retweets'] + tweet['replies'] + tweet['quotes']
         tweet['engagement_rate'], tweet['rate_is_pct'] = calculate_engagement(tweet)
+
+    # 🔴 混合输入不许跨单位排序：只要有一条缺 impressions，整批降级为绝对互动数。
+    # 否则 1620（绝对数）会和 6.60（百分比）在同一个列表里比大小，
+    # S 级完全由"哪条缺 impressions"决定，与表现无关。
+    if tweets and not all(t['rate_is_pct'] for t in tweets):
+        for tweet in tweets:
+            tweet['engagement_rate'] = tweet['engagement_total']
+            tweet['rate_is_pct'] = False
 
     # 按互动率排序
     tweets.sort(key=lambda x: x['engagement_rate'], reverse=True)
