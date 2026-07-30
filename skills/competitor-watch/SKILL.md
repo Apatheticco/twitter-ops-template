@@ -24,14 +24,26 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
 ## 0. 配置与初始化（本 Skill 可被直接触发，不经调度器）
 
 ⚠️ **用户可能直接说「竞对在发什么」而不走 `twitter-ops`**——此时调度器的初始化闸门**不会执行**，
-所以下面这三条必须在本 Skill 内自查：
+所以下面这四条必须在本 Skill 内自查：
 
 **① 账号锚定**：所有拉自家数据的调用一律用 `config.md` 的 `ACCOUNT`（**唯一权威**）。
 仓库根目录 `config.md` 找不到或 `ACCOUNT` 仍是 `@___` → **停下来让用户先填**，别拿占位符去调 API。
 
 **② 目录**：落盘走 `config.md` 的 `STATE_DIR`（留空则用默认 `~/.claude/state/`）。🔴 **指向 `/tmp` 直接停下来报错**——重启即清，跨天资产全丢。这是硬检查不是提示。
 
-**③ 🔑 名单类文件「存在但仍是占位符」= 视同没有**：
+**③ 时钟（🔴 每轮开工第一件事）**：用 shell 现取一次，**全程只用这一组值**：
+
+```bash
+TODAY=$(date +%F)          # 2026-07-30
+WEEK=$(date +%G-W%V)       # 2026-W31 —— ISO 周，跨年不漂
+NOW_MS=$(( $(date +%s) * 1000 ))
+```
+
+🔴 **禁止凭模型自己的日期认知推算 `$DATE` / `$WEEK` / `now`。** 模型的日期偏差常达数月，
+而这两个变量被当**文件名**用——猜错就写进错误日期的文件，下一轮查重扑空、读不到今日产物、
+回填链断，而**全程不报错，产物格式齐全**。这类静默错误比崩溃难查得多。
+
+**④ 🔑 名单类文件「存在但仍是占位符」= 视同没有**：
 本 Skill 依赖的 reference 文件出厂时**都存在**，内容却是 `@[账号1]` / `[例：…]` / 无标记的默认百分比。
 只判「文件不存在」的逃生**永不触发**，会把模板值当成用户的真配置执行。
 判定：出现 `[…]` 方括号占位、`___` 下划线占位，或小节顶部带
@@ -58,8 +70,12 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
 > 不剔的后果是**静默产出错误数据**：中位数/ER/Top3 全建在别人的推文上（实测 max 11.1M 是一条 `RT @grok`），
 > 而报告数字齐全、格式正确，看不出问题。
 > ⚠️ 连带影响 §3 爆款拆解：不剔转推会把**对标账号转的别人的推**拆成「老师本周的 voice/Pattern」去学。
-3. 落盘 JSON，标 vs 上周 Δ%
+3. 落盘 `$STATE_DIR/competitor-watch-$(date +%G-W%V).json`，标 vs 上周 Δ%
 ```
+
+> 🔴 **文件名钉死成 `competitor-watch-$(date +%G-W%V).json`**（如 `competitor-watch-2026-W31.json`）。
+> 周编号必须用 `date +%G-W%V` 现取，**不许凭记忆写周数**。下游（performance-review）靠这个名字找文件，
+> 名字浮动 = 下游永远找不到 = 永远走"当场补扫"慢路径。
 
 | 用途 | 写法 |
 |---|---|
@@ -82,8 +98,10 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
     "账号": {
       "role": "BENCHMARK | BASELINE",
       "followers": 0,
-      "this_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0},
-      "prev_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0},
+      "this_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0, "retweets_dropped": 0},
+      "prev_week": {"count": 0, "median": 0, "max": 0, "over_10k": 0,
+                    "source": "rescanned | inherited",
+                    "source_scanned_at": "ISO8601"},
       "wow_median_pct": 0, "wow_count_pct": 0,
       "top3": [{"text": "...", "views": 0, "pattern": "模式名"}]
     }
@@ -96,6 +114,17 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
 ### 兜底硬规则
 
 定时任务会漏跑——没注册成功、机器关机、任务静默失败都很常见。**下游读这份数据前必须先检查文件在不在，不在就当场 inline 补扫**。别假设"文档里写了自动跑"就等于真的跑了；定时是快路径，兜底补扫才是不漏的保证。
+
+> 🔴 **只检"在不在"不够，必须检"多老"。** 读到文件后先看 `scanned_at`：
+> **距今 >8 天 → 当作不存在，重扫。** 隔了两三周才跑的时候，文件是"在"的，
+> 但里面的 `this_week` 其实是三周前的一周——它会被当成本周基线，
+> 而 `prev_week` 只能从更早的文件继承，于是 `wow_median_pct` 和 `industry_verdict`
+> （普跌/普涨/分化，驱动全局路径决策的那个判定）**静默算错**。
+>
+> **一周内跑第二次**：同名文件会被覆盖，此时 `prev_week` 若从被覆盖前的值继承，
+> 继承到的是"3 天前的本周"，Δ% 全废。所以 `prev_week` 必须标 `source`：
+> `rescanned` = 本次真的重扫了上周窗口（推荐）；`inherited` = 从旧文件继承，
+> 必须同时写 `source_scanned_at`，且报告里要显式披露实际间隔天数。
 
 ## 3. 分析
 
@@ -132,7 +161,11 @@ description: "监控外部账号 — 对标账号（学 voice / hook / Pattern�
 ## 4. 下游
 
 - **选题环节**：读 `best_learnable` 借鉴方向；同时用名单做**撞车查重**——同主题对标账号刚发过就砍掉或换角度。查 BENCHMARK 是"避免和老师撞"，查 BASELINE 是"避免和行业地板撞"。
-- **performance-review**：读周扫数据做 Step 0 行业基线（不用每次重拉）。
+- **performance-review**：读本周扫描文件做 Step 0 行业基线。
+  ⚠️ **但"上周基线"一律由 performance-review 自己重扫，不许复用本文件里的 `prev_week`**——
+  见 `../performance-review/SKILL.md` Step 0 的「🔁 上周基线一律重扫」：
+  上周报告采集时那一周的最后半天还没发完，拿截断快照当基线会**系统性高估本周表现**，
+  甚至翻转结论方向。**WoW 必须来自同一次采集的两个窗口。**
 - **engagement**：**只有 BENCHMARK 里的个人号**能进互动名单，BASELINE **永远不进**。
 
 ← 反向输入：互动中发现的新账号 → 评估后加入名单；热点扫描 → 检查对标账号是否已覆盖该话题。

@@ -62,11 +62,25 @@ trend-scout 会如实标注哪几路因为缺配置跳过了，你据此再补�
 
 ---
 
+## ⚠️ 一次只跑一个
+
+**不要在两个终端里同时跑两个 Skill。** 这套东西没有文件锁，多个 Skill 共享同一批状态文件：
+
+- 日简报被 trend-scout 和 topic-engine 共同追加，frontmatter 还要读-改-写（并发会撕裂）
+- 候选池索引 `-latest.txt`、`last-refresh-*.txt` 都是读-改-写（一方的写入会被另一方覆盖）
+- 弧线计数 `days_hit++`、周配额 `week_published_count` 是非原子自增（会丢计数或双计数）
+
+**这些冲突不会报错**，只会让下一轮读到错的数。串行跑，一轮跑完再跑下一轮。
+
+---
+
 ## 校验
 
 填完可以让 Claude 自查一遍：
 
 > **「检查 config.md 填全了吗」**
 
-它会核对三件事：🔴 三项是否都有值 · `MAIN_ENGINE_TYPES` 是否和 operations-plan §三 对得上 ·
-`STATE_DIR`/`WORK_DIR`/`BRIEF_DIR` 是否都不是 `/tmp`。
+它会核对四件事：🔴 三项是否都有值 · `MAIN_ENGINE_TYPES` 是否和 operations-plan §三 对得上 ·
+`STATE_DIR`/`WORK_DIR`/`BRIEF_DIR` 是否都不是 `/tmp` ·
+以及**日期是不是用 shell 现取的**（各 Skill §0 的时钟条款：`date +%F` / `date +%G-W%V`，
+不许凭模型的日期认知推算——那两个值是文件名，猜错了不报错，只是下一轮读不到东西）。

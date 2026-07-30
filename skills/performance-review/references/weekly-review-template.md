@@ -17,7 +17,8 @@ period_end: YYYY-MM-DD            # 本期止
 prev_period_start: YYYY-MM-DD     # ⭐ 上期起（硬规则）
 prev_period_end: YYYY-MM-DD       # ⭐ 上期止（硬规则）
 total_tweets: N
-tweet_filter: 非 reply
+tweet_filter: 非 reply 且非转推（RT @ 开头一律剔除）
+retweets_dropped: 0        # 剔掉几条转推，必须实数；写 0 = 声明确实一条都没有
 data_pulled_at: "YYYY-MM-DD HH:MM"
 
 # 北极星
@@ -113,6 +114,9 @@ vs 自己的历史 baseline：… ｜ vs 同梯队：… → 一句话结论
 ⑭ self_reply_rate 是 0~1 纯小数（写"未实测"之类文字会让统计抠错数字）
 ⑮ Bottom 3 写满 3 条并标号
 ⑯ 死号/数据缺失已显式标注，无编造数字
+⑰ 已剔转推：`retweets_dropped` 是实数，自家与对标**两侧都剔了**
+   （`include_replies=false` 不过滤转推；漏这步会把别人的推当成你的爆款入库）
+⑱ 排序口径单位正确：没有 impressions 的输入算出来的是**绝对互动数**，不许标成 "%"
 ```
 
 **不过 = 返工。** 确实测不到、只能放行的项，必须在报告顶部显式披露，不许当绿灯划过去。

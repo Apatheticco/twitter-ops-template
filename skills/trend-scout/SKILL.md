@@ -25,6 +25,27 @@ clone 后先改这里，全文只引用这些变量名。未填项 → 相关规
 
 `BOARDS` 的定义句是必需的：板块名不自解释时先查定义再填，**禁照字面猜**（曾把某板块名按字面理解成另一个生态，整块漏扫多天）。
 
+
+### 🕐 时钟（🔴 每轮开工第一件事，先于一切采集）
+
+本文所有 `$DATE` / `$WEEK` / `now` / `scan_ts_ms` **必须来自 shell 现取的这一组值**，
+取一次、全程复用：
+
+```bash
+DATE=$(date +%F)           # 2026-07-30
+WEEK=$(date +%G-W%V)       # 2026-W31 —— ISO 周编号，跨年不漂
+NOW_MS=$(( $(date +%s) * 1000 ))
+```
+
+🔴 **禁止凭模型自己的日期认知推算日期或周数。** 模型的日期偏差常达数月，
+而这两个值被当**文件名**用——猜错就写进错误日期的文件，于是「今日简报是否已存在」查重扑空、
+下游读不到今日产物、回填链断，**而全程不报错、产物格式齐全**。
+凡是要写「今晚 / 明天 / 本周」这类相对时间，也一律以 `$DATE` 为基准换算，不凭印象。
+
+> 周编号只认 `%G-W%V` 一种格式（`2026-W31`）。全文任何周文件名都用它拼，
+> **不许出现 `2026-31` / `2026-W31` 混用**——同一份文件的读写路径不一致，
+> 结果是每天都判「缓存缺失」、每天重建、每天多喊一次告警。
+
 ## 1. 模式入口
 
 | 用词 | 模式 | 窗口 | 输出 |
@@ -182,16 +203,17 @@ RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 开头的�
    data_tracking[]。边际成本 ~1 分钟；没有这一步，data_tracking 会长期全空。
 ① candidates.json（含 "render" 块 = 简报内容槽）→ ② -latest.txt 索引
 ③ state（last-refresh + history）→ ④ narrative-watchlist / deathnote（无命中也写空占位）
-④.5 story registry $STATE_DIR/trend-scout-stories.json：命中弧线 last_hit + days_hit++、
-   新弧线登记、连续 5 天未 hit 标 cooling / 10 天 closed；days_hit≥5 且近 3 次相关推 views
-   递减 → 简报标「⚠️ 弧线疲劳」提示换角度；recurring_excluded 免每日重判
+④.5 story registry $STATE_DIR/trend-scout-stories.json：命中弧线 last_hit=$DATE，
+   days_hit 只在 last_hit != $DATE 时才 ++（🔴 **按日历天计，不按运行次数计**）、
+   新弧线登记、cooling / closed 按 $DATE − last_hit 的**实际天数**判（≥5 天 cooling / ≥10 天 closed）；
+   days_hit≥5 且近 3 次相关推 views 递减 → 简报标「⚠️ 弧线疲劳」；recurring_excluded 免每日重判
 ⑤ 简报：**按固定模板渲染，禁手写散文**——模板从同一份配置生成全部板块行与 list 锚点，
    结构性不可能漏项；渲染内置 raw_score 重算校验（h*0.5+t*0.4+d*0.1，差 >0.01 拒绝渲染）
    与 CATEGORY_CAP 硬闸。简报既是人读文档又是机器工件：散文会漂，模板不会。
 ```
 
 ### 周缓存（仅首扫）
-`$STATE_DIR/trend-scout-weekly-cache-YYYY-WW.json`，**必须在 `$STATE_DIR` 不能在 `/tmp`**（`/tmp` 重启即清，周内合同活不过重启）。内容 = 议员 / 内部人快照。
+`$STATE_DIR/trend-scout-weekly-cache-$WEEK.json`（`$WEEK` = `$(date +%G-W%V)`，如 `2026-W31`；**和 §0 时钟、§首扫三查用的是同一个拼法**），**必须在 `$STATE_DIR` 不能在 `/tmp`**（`/tmp` 重启即清，周内合同活不过重启）。内容 = 议员 / 内部人快照。
 **不要调 earnings / econ calendar 端点**——连续多周返回垃圾（外币小票、关键词被误解析成 ticker）；改用 `$STATE_DIR/trend-scout-anchors.json` **事件锚点登记表**：已核实的 forward 事件（财报日 / 转换窗口 / 发布会）一次登记、每日首扫直接读、过期自动忽略。CPI / 非农逐月官方核实后写入，**禁按惯例直接发推**（曾因日期 churn 3 天翻车）。
 
 ---
@@ -250,11 +272,18 @@ FAIL 必须补做，**不准下传 topic-engine**。建议固化成脚本 + 一�
 
 ① `BOARDS` 板块全列（未配置记 n/a）② P0 list 标记齐（**以 `config.md` 实际配置的条数为准**；一条没配记 n/a） ③ 候选数 floor（首扫 ≥12 / 刷新 ≥7）④ schema 必填完整 ⑤ 简报模板锚点未漂 ⑥ `source_list` / `is_kol_target` 已填 ⑦ 9 个 section 齐 ⑧ TG 审计凭证（≥1 次真实广拉）⑨ state 文件（last-refresh + history）已写 ⑩ 零废弃工具调用（只用 §2 白名单内的） ⑪ 工具调用审计（⑪.a 三栈回执齐即 PASS；⑪.d `source_handle` ∈ 回执 `handles`，WARN-only）⑫ age gate 已执行（无 >48h 陈货入池）。
 
-**叙事清单维护**：T1 刷新重算评分 / T2 每日 `BOARDS` 全扫 / T3 每次扫描落盘 `narrative-watchlist-YYYY-W##.json`（非清单板块满足 ≥3 KOL + 跨语言 + cluster ≥5 时累积）与 `narrative-deathnote-*.json`（连续 4 周 <2.0）/ T4 每月 1 号出审计 prompt，用户拍板增删 `BOARDS`（新增板块**必须同时写定义句**）。
+**叙事清单维护**：T1 刷新重算评分 / T2 每日 `BOARDS` 全扫 / T3 每次扫描落盘 `$STATE_DIR/narrative-watchlist-$WEEK.json`（非清单板块满足 ≥3 KOL + 跨语言 + cluster ≥5 时累积）与 `$STATE_DIR/narrative-deathnote-$WEEK.json`（连续 4 周 <2.0；**跳周会让相邻两个文件被当成连续两周**，判 deathnote 前先核对四个 `$WEEK` 编号真的连续）/ T4 每月 1 号出审计 prompt，用户拍板增删 `BOARDS`（新增板块**必须同时写定义句**）。
 
 ## 8. 突发模式
 
-事件 ID 锚点 `evt-YYYYMMDD-HHMM-keyword` 写 `$STATE_DIR/trend-scout-current-event-id.txt`，所有候选共享。工具：`advanced_search` Latest（最有价值）+ 主 list 关键词过滤 + 当事人 `user_tweets` + replies/quotes 看反应 + 相关 metrics + media news。**keyword 拆 2-3 个独立词并行，禁 AND 长 query**——零结果本身是信号（抢先窗口仍在）。≥2 源确认才标"已验证"。SLA 5 分钟。
+事件 ID 锚点 `evt-YYYYMMDD-HHMM-keyword`（日期时分取自 §0 时钟）写进
+`$STATE_DIR/trend-scout-current-event-id.txt`，**并同时写进每条候选自己的 `event_id` 字段**。
+
+> 🔴 **不许只靠那个共享文件认领事件。** 该文件按天覆盖、"所有候选共享"，
+> 于是一天里出现**第二个**突发事件时，事件 1 的候选会被静默归到事件 2 名下——
+> 归组错了，后续的跨轮追踪、弧线计数、回填全跟着错。
+> 共享文件只当"当前最新事件"的指针用；**归属关系落在候选自己身上**。
+工具：`advanced_search` Latest（最有价值）+ 主 list 关键词过滤 + 当事人 `user_tweets` + replies/quotes 看反应 + 相关 metrics + media news。**keyword 拆 2-3 个独立词并行，禁 AND 长 query**——零结果本身是信号（抢先窗口仍在）。≥2 源确认才标"已验证"。SLA 5 分钟。
 
 ## 9. 信号不足 / 维护
 

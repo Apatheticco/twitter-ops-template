@@ -28,7 +28,20 @@ twitter(action="user_tweets", user_name="你的账号", include_replies=true)
 → 取 next_cursor 续调，直到最老一条 createdAt 早于窗口起点
 ```
 
-分完页后先按 `inReplyToUserId` 是否为空，拆成**原推**和**自己的 reply** 两堆，后面所有口径都基于这个拆分。
+分完页后拆**三堆**，后面所有口径都基于这个拆分：
+
+| 堆 | 判据 | 用途 |
+|---|---|---|
+| **转推** | `text` 以 `RT @` 开头 | **整堆丢弃**，不进任何口径 |
+| **自己的 reply** | `inReplyToUserId` 非空 | 互动方向、作者回复率 |
+| **原推** | 其余 | 中位 / max / ER / Top 3 / 入库 |
+
+> 🔴 **`include_replies=false` 不过滤转推——两个维度必须分别判。**
+> 实测 `@elonmusk` 首页 20 条里 14 条是 `RT @`，其中一条 `RT @grok` 的 11.1M views 会直接成为 max。
+> **少这一步的后果是复合的**：中位/max 建在别人的推文上 → 拆解出的"你的 Pattern"其实是别人的 →
+> 转推被当 S 级写进 `vault.md` 成为你的"可复用爆款句式" → 再喂给写作环节。**错误从此长期污染下游。**
+>
+> 拆完必须在报告里写一行「窗口内 N 条，剔转推 X 条，进入口径 N−X 条」——**数不出来就是没剔。**
 
 ### 2. 互动方向（对外 : 对内）
 
@@ -47,10 +60,19 @@ twitter(action="user_tweets", user_name="你的账号", include_replies=true)
 
 ```
 twitter(action="user_info", user_name="你的账号")
-→ 立刻把 {date, followers} 追加进你的粉丝周快照文件（如 state/followers-weekly.json）→ 回读确认写进去了
+→ 立刻把 {date, followers} 追加进 $STATE_DIR/followers-weekly.json → 回读确认写进去了
 ```
 
+路径钉死成 `$STATE_DIR/followers-weekly.json`（`STATE_DIR` 取自 `config.md`）。
+写「如 ⋯」这类示例路径会让每次运行落到不同地方，而自检 ⑫ 要按这个文件核数。
+
 报告里的周净增必须等于该文件最后两条之差。断档几周而无人察觉是常见事故，所以要**当场回读**。
+
+> 🔴 **算差之前先核对这两条快照的间隔天数。** 「最后两条之差」只校验算术，不校验区间：
+> 一周跑两次 → 最后两条相隔 3 天，算出来的"周净增"实际是 3 天净增；
+> 隔两周才跑 → 是 14 天净增。**数字看起来完全正常，没有任何地方会报错。**
+> 判定：间隔落在 **6–9 天**才可直接叫"周净增"；超出这个区间**必须改写成「N 天净增 X」
+> 并在报告里显式标注实际天数**，不许套用周目标去比。
 
 ### 5. spam 证据链
 
@@ -64,7 +86,9 @@ API 拿不到折叠区，精确 spam 比例测不出来。可用的间接证据�
 
 ### 6. 对标账号数据
 
-同样的 `user_tweets` + 分页，只取窗口内非 reply 条目，算日均发推数 / 中位 views / max views。**走 Agent 子进程 + jq 汇总**，原始 payload 别进主上下文。高频号（单日 ≥10 推）翻页够不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`。
+同样的 `user_tweets` + 分页，只取窗口内**非 reply 且非转推**（`text` 不以 `RT @` 开头，见 §1）的原创推，
+算日均发推数 / 中位 views / max views。**对标账号这一步比自家更要紧**——搬运型账号的首页可能大半是转推，
+不剔就等于拿别人的数据当同行基线。**走 Agent 子进程 + jq 汇总**，原始 payload 别进主上下文。高频号（单日 ≥10 推）翻页够不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`。
 
 ---
 

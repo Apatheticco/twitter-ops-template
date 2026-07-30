@@ -23,6 +23,27 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 
 ---
 
+
+### 🕐 时钟（🔴 每轮开工第一件事，先于一切采集）
+
+本文所有 `$DATE` / `$WEEK` / `now` / `scan_ts_ms` **必须来自 shell 现取的这一组值**，
+取一次、全程复用：
+
+```bash
+DATE=$(date +%F)           # 2026-07-30
+WEEK=$(date +%G-W%V)       # 2026-W31 —— ISO 周编号，跨年不漂
+NOW_MS=$(( $(date +%s) * 1000 ))
+```
+
+🔴 **禁止凭模型自己的日期认知推算日期或周数。** 模型的日期偏差常达数月，
+而这两个值被当**文件名**用——猜错就写进错误日期的文件，于是「今日简报是否已存在」查重扑空、
+下游读不到今日产物、回填链断，**而全程不报错、产物格式齐全**。
+凡是要写「今晚 / 明天 / 本周」这类相对时间，也一律以 `$DATE` 为基准换算，不凭印象。
+
+> 周编号只认 `%G-W%V` 一种格式（`2026-W31`）。全文任何周文件名都用它拼，
+> **不许出现 `2026-31` / `2026-W31` 混用**——同一份文件的读写路径不一致，
+> 结果是每天都判「缓存缺失」、每天重建、每天多喊一次告警。
+
 ## 1. 过程纪律（违规即重跑）
 
 核心价值 = **3 角度备选 + Pattern 匹配 + 多样性校验**。
@@ -46,7 +67,20 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 
 ## 2. 输入
 
-- **强制**：读 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD-latest.txt`（该文件内容为当次 candidates json 的绝对路径）→ candidates.json（首扫 ≥12 / 刷新 ≥7）。`STATE_DIR` 取自 `config.md`，**与 trend-scout 写入的是同一个目录**。**禁止跳过 json 直接读简报挑话题**。
+- **强制**：读 `$STATE_DIR/trend-scout-candidates/$DATE-latest.txt`（`$DATE` 来自 §0 时钟；该文件内容为当次 candidates json 的绝对路径）→ candidates.json（首扫 ≥12 / 刷新 ≥7）。`STATE_DIR` 取自 `config.md`，**与 trend-scout 写入的是同一个目录**。**禁止跳过 json 直接读简报挑话题**。
+
+  > 🔴 **读到了不等于能用——必须查"多老"，不只查"在不在"。**
+  > 全部时效闸原先都写在 trend-scout 的**写入侧**（`age > 48h` 不进池，基准是**扫描时刻**）；
+  > 读取侧只判「文件缺失 → 要求重跑」，于是**文件存在即通过，无论多老**。
+  > 而这个文件叫 `-latest.txt`——名字本身就在诱导 `ls | tail -1` 拿到昨天甚至上周的池子。
+  >
+  > **硬闸**：① 文件名日期必须 == `$DATE`，不等就是**没有今日候选池**，要求先跑 trend-scout，
+  > **不许退而读昨天的**；② 读到 json 后取 `scan_ts_ms`，`NOW_MS − scan_ts_ms > 6h` → 同样拒绝。
+  >
+  > 不查的后果：昨天 20h 的料今天变成 44h，落进 §2「24–48h 保留」通道，
+  > **带着昨天算出来的 `base_timeliness` 分**进选题表——分数看着完全正常。
+  > 另外 candidates 里的价格/涨跌幅也是昨天的「实时数据区」；下游 tweet-composer 起草前会重拉价格，
+  > 但**角度和 hook 已经建在旧价上**，重拉只换数字不换判断。
 - 简报 Markdown 仅作上下文（分歧矩阵 / 宏观 / 社区风向）；用户突发点名可越过 json。
 - json 缺失 / 数量不足 → 不允许自己挑话题，要求重跑 trend-scout。
 - 处理范围：按 raw_score 降序取前 `max(8, 60%)` 条。
@@ -72,9 +106,27 @@ trend-scout（采集）→ **topic-engine（选题 + 开角度）** → tweet-co
 | `twitter-ops/references/content-calendar.md` | 选题金字塔 / 差异化标签 |
 | `performance-review/references/patterns.md` | Pattern 实证 + 反模式 |
 | `performance-review/references/audience-profile.md` | 受众画像 + 时段矩阵 |
-| `<WORK_DIR>/account-weekly-progress-*.json` | 配额缺口 +0.2 |
-| `<WORK_DIR>/account-pending-topics.json` | 待发清单**无条件占 Top 5 名额** |
-| `<WORK_DIR>/account-today-published-count.txt` | ≥4 → 硬叫停警告 |
+| `<WORK_DIR>/account-weekly-progress-$WEEK.json` | 配额缺口 +0.2 |
+| `<WORK_DIR>/account-pending-topics.json` | 待发清单占 Top 5 名额（**有条件**，见下）|
+| `<WORK_DIR>/account-today-published-count-$DATE.txt` | ≥4 → 硬叫停警告 |
+
+> 🔴 **这三个文件本模板里没有任何 Skill 会写——它们是你自己发布流程的产出（可选外部输入）。**
+> 出厂状态下三项全部走「文件缺失 → 跳过」，这是**预期行为，不是故障**，
+> 但必须在输出里如实标一行「配额/叫停闸未接数据源」，**不许静默当成"检查通过"**。
+>
+> **文件名必须带 `$WEEK` / `$DATE`（来自 §0 时钟）**，理由是这三个闸都会被陈值反向触发：
+> - `account-today-published-count` 原先**名字带 today 却没有日期戳**，且**没有任何重置规则**——
+>   昨天写了 4，今天读到 4 → 「≥4 硬叫停」**误触发，当天出不了稿**。
+> - `account-weekly-progress-*.json` 原先是**通配符**，多周文件并存时没有"取最新"规则，
+>   可能拿三周前的进度当本周，静默给 +0.2。改成精确 `$WEEK`，命中不了就是没有。
+> - `account-pending-topics.json` 原先「**无条件**占 Top 5 名额」且**无日期戳**——
+>   三周前写的待发条目会无条件占位，且不受 §2 时效硬过滤（那节只作用于 candidates）。
+>   **改为有条件**：条目须带 `added_on` 字段，`$DATE − added_on > 7 天` 的条目
+>   **降级为普通候选参与打分**，不再直接占位；没有 `added_on` 的条目一律按"超期"处理。
+>
+> 另有两处规则（🅰️ 主引擎缺口 +0.5、周单主题上限预警）依赖「本周已发帖落盘」，
+> **本模板同样不产出该文件**，出厂即走 fallback / 跳过分支——同样要在输出里标出来，
+> 而不是让它变成一条永远静默的死闸。
 
 ## 4. Pattern 匹配（16 模板，详见 `references/angle-templates.md`）
 
@@ -165,7 +217,11 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 | `topic-engine-readlog-$DATE.txt` | 第零步 Read 凭证 |
 | 简报追加 `## 🏆 选题表 · HH:MM` | 7 段：元信息 / 一览表(12 列) / 多样性 / 配额警示 / 5 个选题块(共 15 角度) / 执行序 / 接驳；frontmatter `modes` 加"选题" |
 
-> **latest 索引兜底**：若上游只写了无日期戳的 `-latest.txt`，本 skill 落盘时补写 `echo <候选json绝对路径> > $STATE_DIR/trend-scout-candidates/$DATE-latest.txt`。
+> **latest 索引兜底**：若 `$DATE-latest.txt` **缺失**（上游只落了 json 没写索引），
+> 本 skill 落盘时补写 `echo <候选json绝对路径> > $STATE_DIR/trend-scout-candidates/$DATE-latest.txt`。
+> 🔴 **仅限"缺失"这一种情况**——文件已存在时**绝不改写**。这是 trend-scout 的命名空间，
+> 两个 Skill 都往同一个指针文件写，会出现 topic-engine 把 latest 指回一份**更旧**的 json，
+> 下一轮静默读到错的候选池。
 
 ## 10. 输出前自查（任一不过禁止输出，补做重跑）
 

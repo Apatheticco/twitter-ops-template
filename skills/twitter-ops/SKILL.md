@@ -55,6 +55,23 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 > **范围外一律只 warn 不拦**：config.md 🟡 区、operations-plan §一/§三/§四/§五、voice-guide 其余节。
 > 它们缺失会降低产出质量，输出时如实标注即可——**别把"能跑得更好"写成"不许跑"**。
 
+**⑤ 🕐 时钟：配置闸过了之后的第一个动作，是取一次当前时间并向下游传。**
+
+```bash
+DATE=$(date +%F)           # 2026-07-30
+WEEK=$(date +%G-W%V)       # 2026-W31 —— ISO 周，跨年不漂
+NOW_MS=$(( $(date +%s) * 1000 ))
+```
+
+🔴 **禁止凭模型自己的日期认知推算日期或周数**，也禁止让每个下游 Skill 各自猜——
+调度器取一次，整轮所有 Skill 用同一组值。这两个值被当**文件名**用：猜错 → 写进错误日期的文件 →
+下一轮查重扑空、读不到今日产物、回填链断，而**全程不报错、产物格式齐全**。
+各 Skill 自己的 §0 也各有一条同样的时钟条款（它们可以被直接触发、不经本调度器），
+两处规则必须一致：**周编号只认 `%G-W%V`**。
+
+**⚠️ 一次只跑一轮。** 这套东西没有文件锁，日简报、`-latest.txt`、`last-refresh`、
+弧线计数、周配额全是读-改-写或追加。并发跑不会报错，只会让下一轮读到错的数。
+
 **检测到未初始化时，不要继续跑流水线。** 改为输出：
 
 ```
@@ -126,7 +143,7 @@ description: "Master orchestrator for your daily crypto/macro Twitter operations
 
 ## 3. 节点验收 lint（缺项不准下传）
 
-**trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `$STATE_DIR/trend-scout-candidates/YYYY-MM-DD.json`（刷新档 `-HHMM`） ③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
+**trend-scout**：① 简报分区齐（📊 实时数据区 / 📰 叙事摘要区，数字不混用）② candidates 落盘 `$STATE_DIR/trend-scout-candidates/$DATE.json`（刷新档 `-HHMM`）**且索引 `$DATE-latest.txt` 已写、内容指向的 json 真实存在** —— 只验 json 不验索引，会出现「lint PASS 但 topic-engine 的强制读当场扑空」③ 候选数达标（首扫 ≥12 / 刷新 ≥7）
 
 **topic-engine**：① 5 个选题块 ② 每题 3 角度备选 A/B/C ③ 每角度 5 要素齐（核心观点 / 反共识维度 / Hook / 反向风险 / 结尾金句）④ 每角度标 Pattern 编号 + 内容类型（**两轴都标**：轴 A 形态 + 轴 B 角色，见 operations-plan §三）⑤ 主推角度有打分明细 + 3 角度对比表 ⑥ 不与近 7 天已发选题撞角度
 

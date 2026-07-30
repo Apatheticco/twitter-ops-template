@@ -89,15 +89,31 @@ def load_csv(filepath):
     return tweets
 
 
+def drop_retweets(tweets):
+    """剔除纯转推。
+
+    转推的 text 以 'RT @' 开头（官方归档的 full_text 同样如此）。
+    这一步必须在打分之前做，且必须对所有输入格式统一生效——
+    转推的互动数是别人的，混进来会霸占 S 级榜首，进而被写进素材库当成
+    "你自己的可复用爆款句式"，再喂给写作环节。
+    """
+    kept = [t for t in tweets if not t.get('text', '').lstrip().startswith('RT @')]
+    return kept, len(tweets) - len(kept)
+
+
 def calculate_engagement(tweet):
-    """计算互动率"""
+    """计算互动率（%）或——没有印象数时——绝对互动数。
+
+    返回 (值, 是否为百分比)。调用方必须据此决定单位，
+    否则会把绝对互动数打印成 "12.00%"。
+    """
     total_engagement = tweet['likes'] + tweet['retweets'] + tweet['replies'] + tweet['quotes']
 
     if tweet['impressions'] > 0:
-        return total_engagement / tweet['impressions'] * 100
+        return total_engagement / tweet['impressions'] * 100, True
     else:
-        # 没有印象数时，用绝对互动数作为替代指标
-        return total_engagement
+        # 没有印象数（官方归档格式就是这样）时，退化为绝对互动数排序
+        return total_engagement, False
 
 
 def analyze_tweets(tweets):
@@ -105,7 +121,7 @@ def analyze_tweets(tweets):
     # 计算互动率
     for tweet in tweets:
         tweet['engagement_total'] = tweet['likes'] + tweet['retweets'] + tweet['replies'] + tweet['quotes']
-        tweet['engagement_rate'] = calculate_engagement(tweet)
+        tweet['engagement_rate'], tweet['rate_is_pct'] = calculate_engagement(tweet)
 
     # 按互动率排序
     tweets.sort(key=lambda x: x['engagement_rate'], reverse=True)
@@ -133,12 +149,17 @@ def analyze_tweets(tweets):
     return tweets
 
 
-def output_report(tweets, output_path=None):
+def output_report(tweets, output_path=None, rt_dropped=0):
     """输出分析报告"""
     total = len(tweets)
     if total == 0:
         print("没有推文数据。")
         return
+
+    # 单位不能猜：没有印象数的输入（官方归档）算出来的是绝对互动数，不是百分比
+    is_pct = all(t.get('rate_is_pct') for t in tweets)
+    unit = '%' if is_pct else ''
+    metric_name = '互动率' if is_pct else '绝对互动数'
 
     avg_rate = sum(t['engagement_rate'] for t in tweets) / total
     s_tier = [t for t in tweets if t['grade'] == 'S']
@@ -148,17 +169,23 @@ def output_report(tweets, output_path=None):
     report.append(f"# 推文分析报告")
     report.append(f"")
     report.append(f"**分析时间**：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    report.append(f"**总推文数**：{total}")
-    report.append(f"**平均互动率**：{avg_rate:.2f}%")
+    report.append(f"**总推文数**：{total}（已剔除转推 {rt_dropped} 条）")
+    report.append(f"**平均{metric_name}**：{avg_rate:.2f}{unit}")
     report.append(f"**S级推文**：{len(s_tier)} 条（Top 10%）")
     report.append(f"**A级推文**：{len(a_tier)} 条（Top 25%）")
+    if not is_pct:
+        report.append(f"")
+        report.append(f"> 🔴 **本次排序口径是绝对互动数，不是互动率。**"
+                      f"输入数据没有印象数（impressions），无法算百分比。"
+                      f"绝对值排序会系统性偏向粉丝量增长后的近期推文——"
+                      f"跨期对比无效，只能用来在同一批数据内部挑相对好的。")
     report.append(f"")
 
     report.append(f"## 🏆 S级推文（必须入库）")
     report.append(f"")
     for t in s_tier[:20]:  # 最多展示20条
         text_preview = t['text'][:80].replace('\n', ' ')
-        report.append(f"### [{t['grade']}] 互动率 {t['engagement_rate']:.2f}%")
+        report.append(f"### [{t['grade']}] {metric_name} {t['engagement_rate']:.2f}{unit}")
         report.append(f"**内容**：{text_preview}...")
         report.append(f"**数据**：❤️ {t['likes']} | 🔄 {t['retweets']} | 💬 {t['replies']} | 📊 总互动 {t['engagement_total']}")
         report.append(f"**发布时间**：{t['created_at']}")
@@ -168,7 +195,7 @@ def output_report(tweets, output_path=None):
     report.append(f"")
     for t in a_tier[:20]:
         text_preview = t['text'][:80].replace('\n', ' ')
-        report.append(f"- **[{t['grade']}] {t['engagement_rate']:.2f}%** — {text_preview}...")
+        report.append(f"- **[{t['grade']}] {t['engagement_rate']:.2f}{unit}** — {text_preview}...")
 
     report_text = '\n'.join(report)
 
@@ -206,8 +233,12 @@ def main():
     tweets = loaders[args.format](args.input)
     print(f"加载了 {len(tweets)} 条推文")
 
+    # 统一在这里剔转推——放在 loader 里就要写三遍，漏一个格式就前功尽弃
+    tweets, rt_dropped = drop_retweets(tweets)
+    print(f"剔除转推 {rt_dropped} 条，进入打分 {len(tweets)} 条")
+
     tweets = analyze_tweets(tweets)
-    output_report(tweets, args.output)
+    output_report(tweets, args.output, rt_dropped=rt_dropped)
 
 
 if __name__ == '__main__':
