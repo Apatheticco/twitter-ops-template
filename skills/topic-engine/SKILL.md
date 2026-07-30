@@ -185,6 +185,16 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 - **🧾 子进程回执（必做）**：主进程先生成 `SCAN_TS`（ms epoch，与 `scan_timestamp` 同值）显式传给每个层 B Agent；**每个 Agent 扫完 + jq 后用 Bash 落回执** `<WORK_DIR>/topic-engine-lb-receipt-<userName>-$DATE.json` = `{"userName":"…","raw_count":<原始推文数>,"retweets_dropped":<剔掉的转推数>,"scan_ts":<SCAN_TS>}`。自查按 `scan_ts == layer-b.scan_timestamp 且 (raw_count>0 或 scanned_empty) 且 retweets_dropped 是实数` 计 distinct KOL 数，须 ≥ EXPECTED_KOL，否则 FAIL。（只数自己写进 json 的 `scanned_kols` 长度 = 手写几个名字就能过、零真扫凭据。）
   - **`scanned_empty`**：某 KOL 近 24h 真没发推 → 回执加 `"scanned_empty": true`，区分"扫了·窗口内 0 条"（合法）与"压根没扫"（缺回执）——只看 `raw_count>0` 会把空返回误判成源挂。`layer-b.json` 必须含 ms epoch 的 `scan_timestamp`（回执绑定依赖它）。
 - **4 标签**：🟢 独家（0 命中）/ 🟡 标杆已发（可借鉴角度）/ 🟠 基线已发（需差异化）/ 🔴 双 hit（**直接砍，永不豁免**）。
+  🔴 **命中判定的粒度：按「角度/标的」匹配，不按「主题」匹配**（实测：粒度直接决定砍还是留）。
+  - **算命中**：同一 `$TICKER`/实体 + 同一角度/数据点（如对标发过「$MU 崩 9%」，你也写 $MU 崩盘 = 撞车）。
+  - **不算命中**：同一大主题但**不同标的/不同角度**——对标发「SK hynix 稼动率」，你写「美股 $MU/$SNDK 崩盘」，
+    是同一个存储下行周期但不同标的、不同数据，**这正是差异化本身，不该砍**。
+  - ⚠️ **双 hit 砍是破坏性动作，粒度不确定时默认「不砍、判 🟠 待差异化」**——
+    宁可多留一条要你补差异化的候选，也不要用一个松匹配砍掉本可以发的独家角度
+    （同 §0.5「别拿未定义标准执行破坏性动作」）。砍之前必须能说出「撞的是哪条推的哪个具体角度」。
+  - ⚠️ **跨语言/跨写法是同一实体**：`三星 = Samsung = 삼성`、`美联储 = Fed = FOMC`——
+    匹配要认全，别因写法不同漏判命中（实测 qinbafrank 中文「9票赞成3票反对」↔ Kobeissi 英文「votes 9-3」是同一事件）。
+  - **标杆内部分歧不影响判定**：任一标杆命中即算「标杆已发」，不因另一标杆沉默而降格（实测确认）。
 - **层 A 免费信号**：trend-scout 主 list 内自然出现的对标推文先查一遍（无额外调用）。
 - **架构原则**：对标差异化只在本 skill 做；**禁止**以"对标在讲什么"为选题灵感；禁用自家产品的机械信号作灵感（自吹嫌疑）。
 - **同主题查重切 Pattern**：跟报型候选（🟠/🔴/同梯队已发）对照 `<WORK_DIR>/twitter-published-patterns-$WEEK.json`，entity 重复时主 Pattern 必须切换（如 #5→#2/#3/#16）。文件不存在 **或仍是占位符** → 跳过。
