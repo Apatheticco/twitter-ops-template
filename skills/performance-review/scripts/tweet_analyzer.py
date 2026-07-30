@@ -41,6 +41,7 @@ def load_api_json(filepath):
             'replies': metrics.get('reply_count', 0),
             'quotes': metrics.get('quote_count', 0),
             'impressions': metrics.get('impression_count', 0),  # 默认 0 —— 默认 1 会算出 16200% 并标成互动率
+            'retweeted_tweet': item.get('retweeted_tweet'),  # 非空 = 转推（结构判据，比 text 前缀稳）
         })
     return tweets
 
@@ -113,12 +114,15 @@ def drop_retweets(tweets):
     转推的互动数是别人的，混进来会霸占 S 级榜首，进而被写进素材库当成
     "你自己的可复用爆款句式"，再喂给写作环节。
     """
-    def is_rt(text):
-        s = text.lstrip()
-        # 'RT @user:' 是标准形态；'RT@user:' 少数客户端会产出，同样是转推
+    def is_rt(t):
+        # 首选结构判据：retweeted_tweet 非空（API 格式带；archive/csv 无此字段则为 None）
+        if t.get('retweeted_tweet') is not None:
+            return True
+        # 回退 text 前缀：'RT @user:' 标准形态 / 'RT@user:' 无空格变体
+        s = t.get('text', '').lstrip()
         return s.startswith('RT @') or s.startswith('RT@')
 
-    kept = [t for t in tweets if not is_rt(t.get('text', ''))]
+    kept = [t for t in tweets if not is_rt(t)]
     return kept, len(tweets) - len(kept)
 
 

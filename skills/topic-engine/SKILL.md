@@ -177,7 +177,7 @@ reweight = 时效×0.4 + 数据×0.3 + 争议×0.2 + 热度×0.1
 `BENCHMARK_KOLS + BASELINE_KOLS` × `twitter(action="user_tweets")` 近 24h → 落盘 `<WORK_DIR>/topic-engine-layer-b-$DATE.json`（含 `scan_timestamp`，<2h 复用缓存）。EXPECTED_KOL 数从配置派生，**勿写死**。
 
 - **必抽数**：单账号原始返回 65-172K 字符 → **Agent 子进程内立刻 jq** 抽 `text`(280字) / `userName` / `createdAt` / `viewCount`；per-account cap：媒体号 20、个人 KOL 30。子进程返回 >10K 字符 → 拒收重跑。**禁止跳过基线组省 token。**
-- **🔴 必须剔转推**：jq 抽取时就把 `text` 以 `RT @` 或 `RT@` 开头的条目滤掉（`include_replies=false` **只过滤回复不过滤转推**，同 performance-review 采样总则）。
+- **🔴 必须剔转推**：jq 抽取时剔掉转推（`include_replies=false` **只过滤回复不过滤转推**）。判据：**首选 `retweeted_tweet` 字段非空**（结构性，2026-07-30 实测确认——非转推时为 `null`，转推时含被转原文与真实作者 `retweeted_tweet.author.userName`）；该字段缺失时回退 `text` 以 `RT @` / `RT@` 开头。实测 stacy_muur 20 条里 7 条转推（35%），两个判据 7/7 重合。
   **这里漏剔的后果最狠**：对标账号**转的别人的推**会被算成"标杆已发"，
   配上基线组再一命中就是 🔴 双 hit ——**"直接砍，永不豁免"**。
   于是你的选题被一条**别人的转推**砍掉，而砍的理由在输出里看起来完全成立。

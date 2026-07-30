@@ -44,7 +44,7 @@ DATE = <DATE>    THRESHOLD_MS = <THRESHOLD_MS>
 ── velocity 双轨 ──
 velocity = (likeCount + 2*retweetCount + 0.5*replyCount) / max(age_hours, 0.25)
 
-RT 封顶（结构解，替代黑名单打地鼠）：text 以 "RT @" 或 "RT@" 开头的纯转推 →
+RT 封顶（结构解，替代黑名单打地鼠）：转推判据 = `retweeted_tweet` 非空（首选）或 text 以 "RT @"/"RT@" 开头 →
   velocity_final = min(velocity, 本批次非RT贴最高velocity)
   转发仍是背书信号（保留参与排序），但不许凭被转对象的爆款互动霸榜
   （典型病例：自己原创互动个位数~几百，靠 RT 外部爆款借到 5 万赞 velocity）
