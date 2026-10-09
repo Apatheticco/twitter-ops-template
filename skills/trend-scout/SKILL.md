@@ -68,21 +68,21 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 
 ### 2.1 metrics
 - **tradfi 必传 `asset_type="tradfi"`**，单 ticker 单调用并行（多 ticker 一次塞会被路由到 fundamentals）。
-- **crypto 批量必传 `asset_type="crypto"`**（防同名 tradfi 污染，如 BTC→某 ETF），`time_range="1d", limit=2`。
+- **crypto 批量必传 `asset_type="crypto"`**（防同名 tradfi 污染，如 BTC→某 ETF）+ **`verbosity="detail"`**：24h 涨跌幅 `change_percent_24h` 只在 detail 下返回，standard 只有价格和成交量（N-170，2026-10-09 复测仍如此）；旧写法 `time_range="1d", limit=2` 不会多返日线，别再用它凑涨跌幅。
 - 🔴 **`change` 字段是「美元变动量」不是「百分比」**（实测 META `change:-9.18` / `previousClose:593.41` → 真实 **−1.55%**）。
   百分比必须自己算：`change / previousClose × 100`。**危险在于数值会巧合吻合**——META 的 −9.18 与新闻标题「crashes −9%」看着对上，
   直接拿去和新闻交叉核实会得到**假的"核实通过"**（那 −9% 是盘后跌幅、−9.18 是美元，两个数毫无关系）。写进简报的涨跌幅一律用自算的 %，并注明基准。
-- 🔴 **盘后/盘前拿到的是上一个 regular 收盘，不是当前价**：看 `_quote_session`（`regular_inactive` = 已收盘）与 `_quote_cache`（`last_regular`）。
+- 🔴 **盘后/盘前拿到的是上一个 regular 收盘，不是当前价**：看 `_quote_session`（`regular_inactive` = 已收盘）与 `_quote_cache`（`last_regular`）；`^VIX`、外汇、商品和多数小盘股没有 `_quote_session`（N-139），这时看 `as_of`，不在美东 9:30–16:00 内一律当最近收盘。
   这时 metrics 的 price 是 8+ 小时前的收盘，而**新闻里的盘后价才是当下真相**——「价格铁律」在此时段是反的（见 §6 修正）。
   盘后事件（财报后跳水）标注 `regular 收盘 X（−a%）｜盘后另跌约 b%（来源：新闻，未取到一手盘后价）`，两个数分开写、别混。
 - 🔴 **不带 `asset_type` 的 query 会同时返币和同名 ETF**：`query="BTC price"` 返回 BTC 币 64,140 **和** Grayscale Bitcoin Mini ETF 28.08 两条。
   必须按 `_asset_type` 筛（crypto vs tradfi），别把 28.08 当比特币价。crypto 一律显式传 `asset_type="crypto"`。
-  - 🚨 批量写法：`query="BTC ETH SOL BNB XRP price"` —— 空格拼 symbol 走 query 串，服务端自解析成 keywords（meta 可见 `keywords:[...]`），一次全回。**禁传 `keywords=[...]` 数组**（§2.5）。
+  - 🚨 批量写法：`metrics(keywords=["BTC","ETH","SOL","BNB","XRP"], query="行情", asset_type="crypto", verbosity="detail")`，每批 ≤5（§2.5）。旧的 query 串写法 `query="BTC ETH SOL BNB XRP price"` 2026-10-01 实测对加密代码仍可用（一次全回），可作客户端不接受数组时的回退；**tradfi 的商品 / 指数代码没有可用的 query 串写法**（见下一条）。
   - ⚠️ `time_range` <1d 有 bug（返一个月前数据），小时级用 `interval`。
-- 可用 tradfi symbol：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD USO UUP EURUSD USDJPY`；`^DXY` / `CLUSD` / `NGUSD` 是 402 Special Endpoint，**禁调**。
-- 国债 / 经济日历 / CPI：纯 query 自然语言（`query="US 10 year treasury yield curve"` 即返全曲线）。🔴 **读之前必须按 `_resolved_from_keyword` 去重**——多 keyword 解析会返回内容相同的多行，不去重会把同一条曲线当三个独立数据点（细节见 `references/source-list.md` §MCP 坑位）。
-- **商品（黄金/原油）拿不到一手价**：四个符号里只有替代源可用，口径必须标注 → 见 §MCP 坑位。🔒 拿不到就按「价格数据铁律」标「未取到一手价」，**禁引用新闻里的涨跌幅当数据**。
-- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，🔴 **返回不含 `marketCap`，必须二次批量补市值再按 ≥$1B 过滤 + 按 name 剔 ETF/杠杆**（不做的话杠杆 ETF 会混进候选；正则见 §MCP 坑位）。`biggest gainers/losers` **禁用**。
+- 可用 tradfi symbol（**一律走 `keywords` 数组**，2026-10-01 实测）：`^GSPC ^IXIC ^DJI ^VIX ESUSD GCUSD SIUSD CLUSD BZUSD NGUSD DXUSD EURUSD USDJPY`（`USO` / `UUP` 这类 ETF 也可用，但已不需要拿它们当代理）。写法：`metrics(keywords=["GCUSD","CLUSD","BZUSD","DXUSD","^VIX"], query="行情", asset_type="tradfi")`，每批 ≤5。🔴 **`*USD` 商品代码写进 query 串整批返空且不报错**（实测 `query="GCUSD CLUSD BZUSD ESUSD 行情"` → 0 结果、`status:"ok"`）——旧记载"CLUSD 返 0 / BZUSD 静默丢弃 / 原油只有 USO"（N-30）只在 query 串路径成立，数组路径 WTI 与布油期货价直接可取（N-106）。`NGUSD` 不再是 402。⚠️ **`^DXY` 走数组也被静默丢弃且无 warning**，美元指数用 `DXUSD`。`GOLD` / `OIL` 别名仍会解析成同名美股，不要用。
+- 国债 / 经济日历 / CPI：国债曲线 `metrics(query="treasury yield curve")`（2026-10-01 实测返回干净的 1 行；旧写法 `"US 10 year treasury yield curve"` 会把 curve 误抽成 CRV 并返回多行重复，若仍用旧写法须按 `_resolved_from_keyword` 去重，细节见 `references/source-list.md` §MCP 坑位）。经济日历 `metrics(query="economic calendar", country="US", sort_by="hot", date_from=$DATE, date_to=$DATE+14天)`——**`country="US"` 必传**，不传返回韩国 / 印度等地事件；**`sort_by="hot"` 必传**，不带时按时间排、默认 10 行全是当天低重要度事件，下周的 CPI 根本排不进来（N-128，2026-10-09 复现）。事件名按 N-130 认（核心 CPI 环比叫 `Core Inflation Rate MoM`）。FRED 指标走 `metrics(keywords=["CPIAUCSL",…], categories=["macro"])`。
+- **商品一手价口径**：黄金 `GCUSD`、WTI `CLUSD`、布油 `BZUSD`、白银 `SIUSD` 均为期货价（返回行 `exchange:"COMMODITY"`），走 keywords 数组直接取，口径写"期货"。🔒 拿不到就按「价格数据铁律」标「未取到一手价」，**禁引用新闻里的涨跌幅当数据**。
+- **异动榜**：`metrics(query="most active stocks", asset_type="tradfi")`，🔴 **返回不含 `marketCap`，必须二次批量补市值再按 ≥$1B 过滤 + 按 name 剔 ETF/杠杆**（不做的话杠杆 ETF 会混进候选；正则见 §MCP 坑位）。`biggest gainers` / `biggest losers` 2026-10-01 实测数据已恢复正常（N-111，旧"禁用"撤销），但榜首仍多为仙股，同样要补市值过滤后才能用。
 - **tradfi 降级路径**：行情端点（quote / historical_chart / most_actives）同时 403 → 实时价改用 `mcp__tradingview__yahoo_price`（symbol 直传 `^GSPC ^IXIC ^VIX GC=F CL=F` 及个股；偶发 SSL 瞬断重试 1 次即恢复），简报实时数据区**必须标「替代源」**；异动榜无替代 → 留空标注。
 - **crypto 备援**：`mcp__okx__market_get_ticker`（`instId` 如 `BTC-USDT`）；启用时同样标「替代源」，首次启用前先实测一个 symbol 交叉核对。
 - 🚨 **候选 one_liner 里的涨跌幅必须经行情源核实后才可下传**——新闻 / KOL 转述的百分比一律视为二手（实测偏差可达一倍，且常把盘中峰值当收盘）。
@@ -91,14 +91,14 @@ NOW_MS=$(( $(date +%s) * 1000 ))
 - **firehose**：不传 query，`time_range="1d"（首扫）/"4h"（刷新）, limit=25, source_lang=<NEWS_LANG>`。
 - > ⚠️ **`NEWS_LANG` 留空时，firehose 与下方 TG 广拉塌缩成同一次调用**（参数完全相同）——**只调一次即可**，两条腿的产物都从这一次的 `articles[]` + `social[]` 里取，别重复调浪费额度。
 
-**Telegram 资金流遥测（1 次广拉，主进程直调）**：**不传 `sources=["telegram"]` 数组**（会被拒）→ **无 sources 广拉**：`news(time_range="1d"/"4h", limit=20-25)` + **空 query**；firehose 的 `social[]` 天然含 TG provenance 条目（`tg_kol_feeds`）。
+**Telegram 资金流遥测（1 次广拉，主进程直调）**：`news(sources=["telegram"], time_range="1d"/"4h", limit=20-25)` + **空 query**（2026-10-01 实测 `sources` 数组可用，返回的 `social[]` 全是带 `tg_category` 的 TG 条目，0 额度）。客户端不接受数组入参时退回**无 sources 广拉**：firehose 的 `social[]` 天然含 TG provenance 条目（`tg_kol_feeds`），此时与 firehose 是同一次调用。
   - 🚫 **绝不传 `source_lang`**：TG item 的 `source_lang` 全是空串 `""`，传语言值会把数据全筛光、连续多天误报「源已降级」。
   - 判 TG 真挂：广拉返回里 `tg_kol_feeds` 条目为 0 才是真挂；有任一返回即源活着。
   - **产物只喂简报「资金流」区，不产候选、不做 consensus 聚合**。取两类：**大额转账**（金额 + 方向，挑 ≥$30M 或与当日候选实体相关的，佐证「解锁→交易所 = 实锤抛压」类叙事）、**清算簇**（按主流币聚合多空方向与量级，佐证多空强弱）。**剔** memecoin 喊单 / 赌球 / 与 firehose 重复的头条。
   - 🔴 **先用 `tg_category` 字段做结构过滤，再按内容判断**（实测返回自带此字段，之前没用它）：每条 TG item 带 `tg_category` ∈ {交易信号 / Meme打新 / 链上数据 / 叙事追踪 / 市场结构 / 宏观研判 / 项目研究 / 实盘跟踪}。
     **保留**：链上数据 / 市场结构 / 宏观研判（资金流与结构信号在这里）；**默认剔**：Meme打新 / 实盘跟踪（喊单晒单）。这比纯凭内容判断稳定得多——实测 25 条广拉里靠内容判断砍掉 15 条"软性"，占 60%，而"软性"无量化判据；用 `tg_category` 分流可复现。
   - **只拉 1 次**：TG feed 是 bot 不是 KOL，`distinct_authors` 聚合前提不成立；多 category 路由几乎不分流（10 次 ≈ 1 次信息量）。链上突发走 §8，不靠日常 TG 兜底。
-- **CT firehose（浏览模式，仅首扫）**：**不传 `sources=["twitter"]`** → `news(asset_type="tradfi", query="<当日 3-5 个宽主题词空格拼，如 semiconductor memory oil Fed earnings>", time_range="1d", limit=20)`；Twitter 条目在 `social[]`（`articles[]` 多为 media）。代价：从「无差别浏览」变「主题引导」，主题词由当日 list/firehose 已知线索定，**主题外盲区如实认**。无完整 author/viewCount → 剔个人喊单 / 引流 / 闲聊 / 纯 TA，保留基本面异动 / 产业链 / 地缘 / 高密度框架。刷新模式不启用本层。
+- **CT firehose（浏览模式，仅首扫）**：`news(sources=["twitter"], asset_type="tradfi", time_range="1d", limit=20)` + **空 query**（2026-10-01 实测 `sources=["twitter"]` 可用，返回纯推特条目、按时间排，恢复「无差别浏览」）。客户端不接受数组入参时退回主题引导写法：`news(asset_type="tradfi", query="<当日 3-5 个宽主题词空格拼，如 semiconductor memory oil Fed earnings>", time_range="1d", limit=20)`，Twitter 条目在 `social[]`，**主题外盲区如实认**。无完整 author/viewCount → 剔个人喊单 / 引流 / 闲聊 / 纯 TA，保留基本面异动 / 产业链 / 地缘 / 高密度框架。刷新模式不启用本层。
 - 媒体频道走 web news 不走 TG；同 username 去重 ≤3 条。
 
 ### 2.3 twitter（list_timeline 三栈）
@@ -137,8 +137,8 @@ P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1
 只报墙钟会把 30% 的覆盖说成"回看了一整天"。
 
 ### 2.4 signal
-- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：走 query 串。返回可能超长 → 落盘再抽；剔税务代扣类条目；空信号标 `empty_no_signal` 不阻塞。
-  🔴 **query 写得再具体也不改变返回内容**——`signal` 不做类型路由，想要议员交易只能拿到结果后按 `provenance` 客户端筛（见 §MCP 坑位）。
+- tradfi `insider_trading` / `institutional`（议员 / 内部人 / 13F）：显式传 `categories=["insider_trading"]` / `["institutional"]`（不传返空，N-113）。全市场内部人入口只覆盖最近约 1 个申报日、最多 50 条（N-137）。返回可能超长 → 落盘再抽；剔税务代扣类条目；空信号标 `empty_no_signal` 不阻塞。
+  🔴 **query 写得再具体也不改变返回内容**——`signal` 不做类型路由，想要议员交易只能拿到结果后按 `_chamber` 字段（senate / house）客户端筛（议员行的 `provenance` 是 `"fmp"`，分不出来，N-137；见 §MCP 坑位）。
 - crypto `kol_call` / `trader_position`：**`ACCOUNT_ENGINES` 不含"喊单 / 实盘跟单"则默认关闭**（低差异化、长期 0 候选），突发模式用户明确要"看巨鲸/实盘"时例外；加密交易向账号可全开。
 
 ### 2.5 MCP 类型铁律
@@ -147,7 +147,7 @@ P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1
   ① 参数类型错（数字传了字符串）；② **并发争用**——一条 message 塞多个 followin 调用时，部分会撞到"会话初始化中"而失败，**与参数无关**。
   判别：同批其他同形态调用成功 = 排除类型错，是并发。**动作：失败的那几个减少并发、下一批重试**（实测重试即成功）。
   🔴 原先写「九成是类型错」会把人引向查参数（查不出），这是误导性归因——比没有归因更糟。
-- 🚨 **数组参数全域禁用**：`keywords` / `categories` / `sources` 等**即使主进程直调也会被序列化成字符串遭 schema 拒**（`["market"] has type "string"` 连环 `-32602`），没有安全通道。**统一走 `query` 自然语言 / 空格拼串**，服务端自解析。副作用：返回可能带 fundamentals 噪音（fanout fallback），忽略即可。
+- **入参分工（2026-10-01 实测，取代旧"数组参数全域禁用"）**：`keywords` 数组放标的 / series_id、`query` 放意图词、`categories` / `sources` 指定类别与来源——主进程直调实测全部可用。每次调用最多 5 个 keywords，超出或解析不了的项写在 `meta.warnings`（`keyword_count_over_max` / `kw_not_canonical`），**调用后读一遍**。⚠️ schema 里这几个字段仍无 `type` 声明（N-8 未销案），个别客户端 / 子 Agent 仍可能把数组序列化成字符串而报 `-32602`——遇到才退回 query 串（加密代码、美股代码可退；`*USD` 商品代码退不了，标「未取到一手价」）。`signal` 必须显式传 `categories`（只传 ticker 返回空）。
 - **并发上限**：主进程一条 message 里 followin 调用 **≤4 个**（一次发 12 个会有半数 `-32001` 超时）。⚠️ **实测 ≤4 仍偶发 session-init 失败**（4 个挂 2 个）——把 ≤4 当上限而非保证，失败项按上一条减并发重试。
 - session 每 5-8 calls 可能短挂 → 重试 1 次，或让用户 `/mcp restart followin`。
 
@@ -157,7 +157,7 @@ P0：**`config.md` 里已配置的每条 list 都必须成功**（失败重试 1
 
 1. **只有 `list_timeline` 派 Agent**（单 string 参数 + 返回巨大必须 jq 抽数）；`metrics` / `news` / `signal` 一律主进程直调，分批 ≤4 个/message。
 2. **一 Agent 一调用链一 jq**：翻页**覆盖驱动**——翻到最老一条 `createdAt` 早于窗口起点，或达上限（主 3 页 / 科技 2 页 / 大师 1 页）；到上限仍不足必须注明「⚠️ 覆盖不足：实覆盖 X.Xh（墙钟 Y.Yh）」（诚实标注 > 假装覆盖；🔴 报**实覆盖**不是墙钟跨度，见 §2.3 分页丢块）。刷新维持单页。prompt 必含「🚫 不要读 SKILL.md」。
-3. **首扫单批次全并发**：所有采集（主进程直调 + 全部 Agent）在**同一条 message** 发出，不分波；跨源综合（聚合 / 共振 / 跨界传导 / 纯交易预排除）等全返回后在主进程做。
+3. **首扫主进程直调分波执行**：每波 ≤4 路 MCP 调用（红线 2 + N-50）；Agent 派发不占 MCP 并发、可同批发出，但各 Agent 内部同样 ≤4。跨源综合（聚合 / 共振 / 跨界传导 / 纯交易预排除）等全返回后在主进程做。
 
 **Agent prompt**：用 `references/agent-prompt-template.md` **逐字复制、只替换占位符**。
 那份文件里是完整载荷（createdAt strptime 规范 / velocity 双轨公式 / RT 封顶 / age<0 报错口径 /
@@ -177,10 +177,11 @@ Skill 侧只做内容级过滤，**不维护点名黑名单**。
 ## 4. 标准执行流（首扫）
 
 ```
-单批次全并发（一条 message）：
-  主进程直调：metrics(crypto 批量) · metrics(tradfi 按需 4-12 单调) · metrics(国债/宏观 query)
-              metrics(most_actives → 二次补市值后过滤 mc≥$1B) · news(firehose) · news(TG 广拉 1 次)
-  Agent 并行：A 主list · B 科技list · C 大师list · D CT firehose 过滤
+主进程直调分波执行（每波 ≤4 路 MCP，红线 2 + N-50）：
+  波1：metrics(crypto 批量) · metrics(国债/宏观 query) · news(firehose) · news(TG 广拉 1 次)
+  波2起：metrics(tradfi 按需，keywords 数组每批 ≤5、每波 ≤4 路) · metrics(most_actives → 二次补市值后过滤 mc≥$1B)
+  Agent 并行（不占 MCP 并发、可与波1 同批发出；各 Agent 内部同样 ≤4）：
+              A 主list · B 科技list · C 大师list · D CT firehose 过滤
               F Wave2B（议员/内部人快照，仅本周首个无缓存日建缓存[不限周几]；
                 有缓存日不派 F、主进程直接读）
 全部返回 → 主进程综合 → 按落盘顺序出文件 → 自查
@@ -209,20 +210,20 @@ Skill 侧只做内容级过滤，**不维护点名黑名单**。
 
 ### 周缓存（仅首扫）
 `$STATE_DIR/trend-scout-weekly-cache-$WEEK.json`（`$WEEK` = `$(date +%G-W%V)`，如 `2026-W31`；**和 §0 时钟、§首扫三查用的是同一个拼法**），**必须在 `$STATE_DIR` 不能在 `/tmp`**（`/tmp` 重启即清，周内合同活不过重启）。内容 = 议员 / 内部人快照。
-**不要调 earnings / econ calendar 端点**——连续多周返回垃圾（外币小票、关键词被误解析成 ticker）；改用 `$STATE_DIR/trend-scout-anchors.json` **事件锚点登记表**：已核实的 forward 事件（财报日 / 转换窗口 / 发布会）一次登记、每日首扫直接读、过期自动忽略。CPI / 非农逐月官方核实后写入，**禁按惯例直接发推**（曾因日期 churn 3 天翻车）。
+**不要调 earnings calendar 端点**——连续多周返回垃圾（外币小票、关键词被误解析成 ticker）；经济日历按 §2.1 的写法（带 `sort_by="hot"`）可用，只用来核宏观事件日期、核完写进下面的锚点表。改用 `$STATE_DIR/trend-scout-anchors.json` **事件锚点登记表**：已核实的 forward 事件（财报日 / 转换窗口 / 发布会）一次登记、每日首扫直接读、过期自动忽略。CPI / 非农逐月官方核实后写入，**禁按惯例直接发推**（曾因日期 churn 3 天翻车）。
 
 ---
 
 ## 5. 打分与候选池
 
-**5.0 age gate（落盘前硬闸，最先执行）**：每条算 `age = (scan_ts_ms − first_seen_ts_ms)/3600000`，**>48h 直接踢进 `removed_stale_violation` 不进池**。⚠️ firehose `time_range=1d` 的 trending feed 按**热度而非时间**返回，常混多日陈货，肉眼核会漏 → **必须机器核**。剔除后若 <floor，补**真新鲜**信号，**禁回填陈货**。
+**5.0 age gate（落盘前硬闸，最先执行）**：每条算 `age = (scan_ts_ms − first_seen_ts_ms)/3600000`，**>48h 直接踢进 `removed_stale_violation` 不进池**。⚠️ firehose `time_range=1d` 的 trending feed 按**热度而非时间**返回，常混多日陈货，肉眼核会漏 → **必须机器核**。⚠️ firehose 趋势榜条目的 `published_ts` 是**话题刷新时间**不是事件时间（N-146）——不能直接当 `first_seen_ts_ms`：用 `news(query=<事件关键词>, sort_by="relevance")` 取**报道同一事件的**最早一篇的 `published_ts`（实测 Orca 合并：趋势榜给 10h 前，首篇报道在 29.5h 前）。🔴 **不是返回里最早的一篇**：relevance 会带回同名项目的旧稿（10-09 实测 Starknet 转 L1：首报 15h 前，但同批返回里有 5 个月前的版本升级稿，加 `time_range="3d"` 仍混进 55h 前的运维公告）——照"最早一篇"取会把当天新事件误踢成陈货；逐条核标题 / 正文是同一事件再取最早。剔除后若 <floor，补**真新鲜**信号，**禁回填陈货**。
 
 🔴 **floor 与「🔗聚合事件」方向相反，必须给高集中度日一个可区分状态**（实测暴露）：
 big-news 日（Fed / 财报季 / 崩盘）list 出 18 条，按 §5.4 `🔗聚合事件`（同实体 ≥2 条合并）合并后可能只剩 8 个**独立事件** < floor 12。
 **这不是采集不足，恰恰是信息量最大**——要凑满 12 就得不合并、留一堆同一事件的碎片，那才是真降质。
 判别与动作：
 - 若 `原始候选数 ≥ floor` 且 `合并压缩比高`（原始 / 独立事件 ≥1.5）且**每个 `🔗聚合事件` 标签都成立** →
-  记 **`concentrated_day`**：候选数按独立事件算、**不判 FAIL、正常下传**，但简报顶部标
+  记 **`concentrated_day`**（写进 candidates json **顶层** `"concentrated_day": true`，与 `scan_ts_ms` 同级——topic-engine §2 与 twitter-ops §3 lint 都只读这个字段，只写在简报里等于没记）：候选数按独立事件算、**不判 FAIL、正常下传**，但简报顶部标
   「⚠️ 高集中度日：N 条原始合并为 M 个独立事件，未强凑 floor」。
 - 若原始候选就 < floor（真采集不足：源少 / 窗口空）→ 照常 FAIL、要求补采。
 **区别在于「合并前够不够」**：合并前够 = 集中不是缺，合并前不够 = 真缺。

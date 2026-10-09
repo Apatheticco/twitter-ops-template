@@ -76,7 +76,7 @@ topic-engine（选题 + 角度）→ **tweet-composer（撰写）** → 人工�
 
 ## 2. Draft 落盘 schema
 
-终稿先落 `$STATE_DIR/tweet-composer-draft-$DATE-$(date +%H%M).md`（`$DATE` 来自 §0 时钟），§9 按这个 schema 核：
+终稿先落 `$STATE_DIR/tweet-composer-draft-$DATE-$(date +%H%M)-<candidate_id>.md`（`$DATE` 来自 §0 时钟），§9 按这个 schema 核：
 
 > 🔴 **文件名必须带时分，不能只按天。** 频次预算自己允许一天出多条稿，
 > 而本文件的 schema 是「单文档单 `candidate_id`」，结构上装不下多稿——
@@ -84,6 +84,7 @@ topic-engine（选题 + 角度）→ **tweet-composer（撰写）** → 人工�
 > 更麻烦的是 §8「反重叠 vs 当日已发清单」的天然数据源就是这些草稿文件，
 > 被覆盖之后连查重都没得查了。
 > 同日多稿一律各自成文件；要找"最新一稿"就按文件名时分排序。
+> 文件名末尾再带 `candidate_id`：按执行序一口气写多条时，同一分钟内落盘的几稿只按时分命名会互相覆盖（2026-10-09 实跑三稿同在一分钟）。
 
 ```markdown
 ---
@@ -169,6 +170,8 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
 账号级数据          → mcp__followin__twitter(action=…)    原文是 URL → WebFetch
 ```
 
+> ⚠️ **N-54**：`metrics` fundamentals 的季度数组只返最近 4 个季度——最新季 YoY 的对比季（去年同期）不在窗口内。财报推做同比**只能做环比（QoQ）或标注"YoY 数据源外部"**，别把窗口里最老那季当去年同期（那是 3 季前不是 4 季前）。
+
 可接受输入：研报 / 文章链接 · 粘贴的长文本 · 白皮书或 PDF · 别人的推文串（整合再创作）· 语音转文字笔记 · 要点大纲。
 
 ## 5. 事实核查 6 维
@@ -206,7 +209,7 @@ breaking_ip_hook / breaking_ticker / breaking_magnitude: true|false
   🔴 **只认 §二 的「日发推目标：工作日 `[X]` 条」这一行**，且该节带 `INIT-STATUS: template-default`
   → 按 §0 ④ 视同未配置。
   ⚠️ **不要退而去别处找数字**：§二 上方的时段表（合计 4–5 条）是配比建议不是上限，
-  §七「单日上限 10 条」是刷屏红线不是日目标，engagement §3.1 的「1–2 条」是它自己那套日类型分级。
+  §七「不刷屏」是刷屏红线不是日目标（该行明写「别把这里的 10 当配额用」），engagement §3.1 的「1–2 条」是它自己那套日类型分级。
   拿任何一个当日上限都是**用一个用户没确认过的数字去砍真实的稿子**。
   「普通日 / 重大日 / 突发日」这个三档分级是本文件曾经自己编的，operations-plan 里没有，已删。
   处理方式**和另外三条阈值不同**——它们是质量类（漏掉只是稿子差点，放行是对的），
