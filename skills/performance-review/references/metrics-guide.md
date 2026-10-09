@@ -83,17 +83,17 @@ twitter(action="user_info", user_name="你的账号")
 
 API 拿不到折叠区，精确 spam 比例测不出来。可用的间接证据：
 
-1. `twitter(action="tweet_replies_v2", tweet_id=...)` 对 N 条评论只吐出 <10% → 折叠降权区存在
+1. `twitter(action="tweet_replies_v2", tweet_id=...)` **翻页翻到 `has_next_page=false`** 后仍显著少于 `replyCount` → 折叠降权区存在（N-57：`has_next_page` 仍 true 时返回数 < replyCount 多半只是分页，不可判折叠）
 2. `twitter(action="search", query="to:你的账号")` 全周索引数远小于 replies 总和
 3. 抽样看漏出评论者的昵称/粉丝数/注册日期 → 批量注册引流号特征
 
-**取不到评论体本身就是证据，不是采集失败。** 要精确数只能人工浏览器登录态展开。
+**"取不到评论体"单独不构成证据（N-57）：`has_next_page` 仍 true 时多半是分页没翻完，必须翻到 `has_next_page=false` 才可下折叠结论。** 要精确数只能人工浏览器登录态展开。
 
 ### 6. 对标账号数据
 
 同样的 `user_tweets` + 分页，只取窗口内**非 reply 且非转推**（转推判据见 §1：首选 `retweeted_tweet` 非空，回退 `text` 前缀）的原创推，
 算日均发推数 / 中位 views / max views。**对标账号这一步比自家更要紧**——搬运型账号的首页可能大半是转推，
-不剔就等于拿别人的数据当同行基线。**走 Agent 子进程 + jq 汇总**，原始 payload 别进主上下文。高频号（单日 ≥10 推）翻页够不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`。
+不剔就等于拿别人的数据当同行基线。**走 Agent 子进程 + jq 汇总**，原始 payload 别进主上下文。高频号（单日 ≥10 推）翻页够不到窗口起点时改用 `twitter(action="search", query="from:账号", time_range=...)`，返回后**按 `createdAt` 客户端再滤一遍窗口**（`time_range` 不是严格窗口，N-89）。
 
 ---
 

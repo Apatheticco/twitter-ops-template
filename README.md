@@ -1,6 +1,6 @@
 # Twitter Ops Workflow
 
-**一套跑在 Claude Code 上的 Twitter 日运营工作流**——把「扫热点 → 选题 → 写稿 → 互动 → 复盘」这条链路拆成 7 个可组合的 Skill，用真实市场数据驱动，每一步都可以人工接管。
+**一套跑在 Claude Code 上的 Twitter 日运营工作流**——把「扫热点 → 选题 → 写稿 → 互动 → 复盘」这条链路拆成 7 个可组合的 Skill（外加一个可选的台账 Skill），用真实市场数据驱动，每一步都可以人工接管。
 
 面向**加密 / 宏观 / 美股方向的内容账号**。
 
@@ -21,7 +21,7 @@
 | | |
 |---|---|
 | **客户端** | Claude Code（其他支持 MCP + Markdown 指令的客户端也可，需自行适配格式）|
-| **MCP** | [Followin MCP](https://followin.io/en/mcp) —— 用到其中 4 个工具：`metrics`（行情/宏观/基本面）· `news`（新闻/社媒/研报）· `signal`（KOL 喊单/持仓/内部人）· `twitter`（推特读写）|
+| **MCP** | [Followin MCP](https://followin.io/en/mcp) —— 用到其中 5 个工具：`metrics`（行情/宏观/基本面）· `news`（新闻/社媒/研报）· `signal`（KOL 喊单/持仓/内部人）· `twitter`（推特读写）· `subscription`（喊单标的订阅收件箱）|
 
 接入（Claude Code）：
 
@@ -40,7 +40,7 @@ git clone https://github.com/Apatheticco/twitter-ops-template.git
 cd twitter-ops-template
 
 # ⚠️ 先看看会不会覆盖你已有的 skill
-ls ~/.claude/skills/ 2>/dev/null | grep -E "trend-scout|topic-engine|tweet-composer|performance-review|competitor-watch|engagement|twitter-ops"
+ls ~/.claude/skills/ 2>/dev/null | grep -E "trend-scout|topic-engine|tweet-composer|performance-review|competitor-watch|engagement|twitter-ops|ledger"
 
 # 没有输出 → 安全，直接拷
 cp -rn skills/* ~/.claude/skills/
@@ -129,7 +129,7 @@ cp -rn skills/* ~/.claude/skills/
 
 ---
 
-## 7 个 Skill
+## 7 个 Skill + 1 个可选台账
 
 ### 调度
 
@@ -158,6 +158,16 @@ cp -rn skills/* ~/.claude/skills/
 | **performance-review** | 周复盘：数据、诊断、优化建议，顺手把好稿子入素材库 | 「这周数据怎么样」 |
 | **competitor-watch** | 对标账号监控——学手法，也看自己在坐标系里的位置 | 「竞对在发什么」 |
 
+### 台账（可选）
+
+| Skill | 作用 | 触发 |
+|---|---|---|
+| **ledger** | 把各节点产出写进飞书多维表格，并回读三类查询：7 天撞题查重 / Pattern「≥2 次」闸 / P0 落地率与断点告警。**全仓唯一调 lark-cli 的地方** | 「写台账」「落地率多少」 |
+
+> 不配 `config.md` 的 `LARK_BASE` 就整条跳过，其余 7 个 Skill 照常跑。
+> 装了之后的好处是**几个"靠模型数数"的判断改由数据库算**——
+> 尤其素材库去重和 Pattern 的「≥2 次」准入闸，那两处数错了不会报错，只会让一次偶发爆款被制度化成"稳定模式"。
+
 ---
 
 ## 几条设计取舍
@@ -180,6 +190,8 @@ cp -rn skills/* ~/.claude/skills/
 - **互动与复盘模块需要你先填名单**——没有 KOL 目标和对标账号，这两块跑不出东西
 - **数据源单一。** 全部依赖 Followin MCP，它挂了整条链路就停
 - **输出是终稿不是发布。** 没有自动发推能力，也不打算加
+
+> **数据源的已知坑**记在 Followin-Skills 仓库的 [`references/followin-mcp-caveats.md`](https://github.com/Followin-AI/Followin-Skills/blob/main/references/followin-mcp-caveats.md)——各 SKILL 里出现的 `N-xx` 编号都指那份文件。N-47~N-58 是这套 Twitter 工作流端到端实跑时积累的（字段可空性、端点行为差异、命名不一致等）；后续推特相关的坑见 N-89 / N-178 / N-182 / N-186 / N-189（search 时间窗不严格、转推带原推时间、list 每页只显示 20 条等）。
 
 ## License
 
